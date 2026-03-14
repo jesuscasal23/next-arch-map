@@ -7,14 +7,11 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     permissions:
-      contents: write
+      contents: read
       id-token: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
@@ -25,17 +22,13 @@ jobs:
 
       - run: npm run build
 
+      - name: Set version from commit count
+        run: |
+          COMMIT_COUNT=$(git rev-list --count HEAD)
+          npm version "0.1.${COMMIT_COUNT}" --no-git-tag-version
+          echo "Publishing version 0.1.${COMMIT_COUNT}"
+
       - name: Publish
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Bump version for next release
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          npm version patch --no-git-tag-version
-          NEW_VERSION=$(node -p "require('./package.json').version")
-          git add package.json package-lock.json
-          git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
-          git push

@@ -111,6 +111,7 @@ export function App() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activePreset, setActivePreset] = useState<LayerPreset | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
     setGraph(null);
@@ -468,6 +469,7 @@ export function App() {
             visibleEdgeKinds={visibleEdgeKinds}
             onToggleNodeType={toggleNodeType}
             onToggleEdgeKind={toggleEdgeKind}
+            showAdvanced={showAdvanced}
           />
 
           {/* Query */}

@@ -34,11 +34,12 @@ export async function serve(options: ServeOptions): Promise<void> {
     isAnalyzing = true;
 
     try {
-      previousGraph = currentGraph;
-      currentGraph = await analyzeProject({
+      const nextGraph = await analyzeProject({
         projectRoot,
         appDirs: options.appDirs,
       });
+      previousGraph = currentGraph;
+      currentGraph = nextGraph;
 
       const pageCount = currentGraph.nodes.filter((node) => node.type === "page").length;
       const endpointCount = currentGraph.nodes.filter((node) => node.type === "endpoint").length;

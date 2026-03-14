@@ -7,13 +7,13 @@ import {
   buildEndpointNode,
   buildPageNode,
   collectStringConstants,
+  ensureNode,
   getExistingDirectories,
   getPageRouteFromFile,
   getSourceFile,
   getStringLiteralValue,
   isIgnoredSourceFile,
   isPageFile,
-  mergeNode,
   resolveProjectRoot,
   walkDirectory,
 } from "../utils.js";
@@ -78,17 +78,26 @@ export async function analyzePagesToEndpoints(
         continue;
       }
 
-      const route = getPageRouteFromFile(appDir, filePath);
-      if (isPageFile(filePath)) {
-        ensureNode(nodes, nodeIds, buildPageNode(route, filePath));
-      }
-
       const sourceFile = getSourceFile(filePath, sourceFileCache);
       if (!sourceFile) {
         continue;
       }
 
-      for (const call of collectHttpCalls(sourceFile, httpClientIdentifiers, httpClientMethods)) {
+      const httpCalls = collectHttpCalls(sourceFile, httpClientIdentifiers, httpClientMethods);
+
+      // Non-page files (route handlers, layouts, helpers) under app/ only
+      // contribute endpoint nodes without creating fake page flows.
+      if (!isPageFile(filePath)) {
+        for (const call of httpCalls) {
+          ensureNode(nodes, nodeIds, buildEndpointNode(call.endpoint, filePath));
+        }
+        continue;
+      }
+
+      const route = getPageRouteFromFile(appDir, filePath);
+      ensureNode(nodes, nodeIds, buildPageNode(route, filePath));
+
+      for (const call of httpCalls) {
         const nextCallIndex = (callIndexByRoute.get(route) ?? 0) + 1;
         callIndexByRoute.set(route, nextCallIndex);
         const actionContext = inferActionContext(call.node, sourceFile, nextCallIndex);
@@ -106,7 +115,7 @@ export async function analyzePagesToEndpoints(
         const endpointNode = ensureNode(
           nodes,
           nodeIds,
-          buildEndpointNode(call.endpoint, filePath, call.method)
+          buildEndpointNode(call.endpoint, filePath)
         );
 
         const pageActionKey = buildEdgeKey(pageNode.id, actionNode.id, "page-action");
@@ -163,7 +172,7 @@ export async function analyzePagesToEndpoints(
       }
 
       for (const call of collectHttpCalls(sourceFile, httpClientIdentifiers, httpClientMethods)) {
-        ensureNode(nodes, nodeIds, buildEndpointNode(call.endpoint, filePath, call.method));
+        ensureNode(nodes, nodeIds, buildEndpointNode(call.endpoint, filePath));
       }
     }
   }
@@ -252,23 +261,6 @@ function getEndpointArgument(
   }
 
   return getStringLiteralValue(expression);
-}
-
-function ensureNode(nodes: Node[], nodeIds: Set<string>, node: Node): Node {
-  if (nodeIds.has(node.id)) {
-    const existingNodeIndex = nodes.findIndex((entry) => entry.id === node.id);
-    if (existingNodeIndex === -1) {
-      return node;
-    }
-
-    const mergedNode = mergeNode(nodes[existingNodeIndex], node);
-    nodes[existingNodeIndex] = mergedNode;
-    return mergedNode;
-  }
-
-  nodeIds.add(node.id);
-  nodes.push(node);
-  return node;
 }
 
 function inferActionContext(

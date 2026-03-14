@@ -1,6 +1,7 @@
 import type { Edge, Graph, Node } from "./model.js";
+import { buildEdgeKey } from "./utils.js";
 
-export type DiffStatus = "added" | "removed" | "unchanged";
+export type DiffStatus = "added" | "removed" | "modified" | "unchanged";
 
 export type NodeDiff = {
   node: Node;
@@ -17,12 +18,12 @@ export type GraphDiff = {
   edges: EdgeDiff[];
 };
 
-function buildNodeKey(node: Node): string {
-  return node.id;
+function nodeEqual(a: Node, b: Node): boolean {
+  return a.type === b.type && a.label === b.label && JSON.stringify(a.meta) === JSON.stringify(b.meta);
 }
 
-function buildEdgeKey(edge: Edge): string {
-  return `${edge.from}::${edge.to}::${edge.kind}`;
+function edgeEqual(a: Edge, b: Edge): boolean {
+  return JSON.stringify(a.meta) === JSON.stringify(b.meta);
 }
 
 export function diffGraphs(before: Graph, after: Graph): GraphDiff {
@@ -32,19 +33,19 @@ export function diffGraphs(before: Graph, after: Graph): GraphDiff {
   const afterEdges = new Map<string, Edge>();
 
   for (const node of before.nodes) {
-    beforeNodes.set(buildNodeKey(node), node);
+    beforeNodes.set(node.id, node);
   }
 
   for (const node of after.nodes) {
-    afterNodes.set(buildNodeKey(node), node);
+    afterNodes.set(node.id, node);
   }
 
   for (const edge of before.edges) {
-    beforeEdges.set(buildEdgeKey(edge), edge);
+    beforeEdges.set(buildEdgeKey(edge.from, edge.to, edge.kind), edge);
   }
 
   for (const edge of after.edges) {
-    afterEdges.set(buildEdgeKey(edge), edge);
+    afterEdges.set(buildEdgeKey(edge.from, edge.to, edge.kind), edge);
   }
 
   const nodes: NodeDiff[] = [];
@@ -65,8 +66,9 @@ export function diffGraphs(before: Graph, after: Graph): GraphDiff {
       continue;
     }
 
-    if (afterNode) {
-      nodes.push({ node: afterNode, status: "unchanged" });
+    if (beforeNode && afterNode) {
+      const status = nodeEqual(beforeNode, afterNode) ? "unchanged" : "modified";
+      nodes.push({ node: afterNode, status });
     }
   }
 
@@ -85,8 +87,9 @@ export function diffGraphs(before: Graph, after: Graph): GraphDiff {
       continue;
     }
 
-    if (afterEdge) {
-      edges.push({ edge: afterEdge, status: "unchanged" });
+    if (beforeEdge && afterEdge) {
+      const status = edgeEqual(beforeEdge, afterEdge) ? "unchanged" : "modified";
+      edges.push({ edge: afterEdge, status });
     }
   }
 

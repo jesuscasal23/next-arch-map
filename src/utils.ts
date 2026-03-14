@@ -232,6 +232,23 @@ export function buildEdgeKey(from: string, to: string, kind: string): string {
   return `${from}::${to}::${kind}`;
 }
 
+export function ensureNode(nodes: Node[], nodeIds: Set<string>, node: Node): Node {
+  if (nodeIds.has(node.id)) {
+    const existingNodeIndex = nodes.findIndex((entry) => entry.id === node.id);
+    if (existingNodeIndex === -1) {
+      return node;
+    }
+
+    const mergedNode = mergeNode(nodes[existingNodeIndex], node);
+    nodes[existingNodeIndex] = mergedNode;
+    return mergedNode;
+  }
+
+  nodeIds.add(node.id);
+  nodes.push(node);
+  return node;
+}
+
 export function collectStringConstants(sourceFile: ts.SourceFile): Map<string, string> {
   const constMap = new Map<string, string>();
 
@@ -310,7 +327,7 @@ export function buildPageNode(route: string, filePath: string) {
   };
 }
 
-export function buildEndpointNode(endpoint: string, filePath: string, method?: string) {
+export function buildEndpointNode(endpoint: string, filePath: string) {
   return {
     id: `endpoint:${endpoint}`,
     type: "endpoint" as const,
@@ -318,7 +335,6 @@ export function buildEndpointNode(endpoint: string, filePath: string, method?: s
     meta: {
       filePath,
       route: endpoint,
-      ...(method ? { method } : {}),
     },
   };
 }

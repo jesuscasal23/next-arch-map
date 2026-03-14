@@ -1,9 +1,5 @@
 import type { Edge, Graph, Node } from "./model.js";
-import { mergeEdge, mergeNode } from "./utils.js";
-
-function buildEdgeKey(edge: Pick<Edge, "from" | "to" | "kind">): string {
-  return `${edge.from}::${edge.to}::${edge.kind}`;
-}
+import { buildEdgeKey, mergeEdge, mergeNode } from "./utils.js";
 
 export function mergeGraphs(graphs: Graph[]): Graph {
   return graphs.reduce<Graph>(
@@ -26,11 +22,11 @@ export function mergePartial(base: Graph, additions: { nodes: Node[]; edges: Edg
   }
 
   for (const edge of base.edges) {
-    edgesByKey.set(buildEdgeKey(edge), edge);
+    edgesByKey.set(buildEdgeKey(edge.from, edge.to, edge.kind), edge);
   }
 
   for (const edge of additions.edges) {
-    const edgeKey = buildEdgeKey(edge);
+    const edgeKey = buildEdgeKey(edge.from, edge.to, edge.kind);
     const existingEdge = edgesByKey.get(edgeKey);
     edgesByKey.set(edgeKey, existingEdge ? mergeEdge(existingEdge, edge) : edge);
   }

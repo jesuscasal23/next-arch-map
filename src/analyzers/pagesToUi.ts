@@ -5,11 +5,11 @@ import {
   buildEdgeKey,
   buildPageNode,
   buildUiNode,
+  ensureNode,
   getExistingDirectories,
   getPageRouteFromFile,
   getSourceFile,
   isPageFile,
-  mergeNode,
   resolveLocalModulePath,
   resolveProjectRoot,
   walkDirectory,
@@ -147,11 +147,7 @@ function isUiLikeImport(
   projectRoot: string,
   uiPathMatchers: RegExp[]
 ): boolean {
-  if (
-    importSource.startsWith("./components") ||
-    importSource.startsWith("../components") ||
-    importSource.startsWith("@/components/")
-  ) {
+  if (/^\.\.?\/components(\/|$)/.test(importSource) || importSource.startsWith("@/components/")) {
     return true;
   }
 
@@ -190,21 +186,4 @@ function globToRegExp(glob: string): RegExp {
 
   pattern += "$";
   return new RegExp(pattern);
-}
-
-function ensureNode(nodes: Node[], nodeIds: Set<string>, node: Node): Node {
-  if (nodeIds.has(node.id)) {
-    const existingNodeIndex = nodes.findIndex((entry) => entry.id === node.id);
-    if (existingNodeIndex === -1) {
-      return node;
-    }
-
-    const mergedNode = mergeNode(nodes[existingNodeIndex], node);
-    nodes[existingNodeIndex] = mergedNode;
-    return mergedNode;
-  }
-
-  nodeIds.add(node.id);
-  nodes.push(node);
-  return node;
 }

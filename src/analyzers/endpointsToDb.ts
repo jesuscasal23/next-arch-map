@@ -6,12 +6,12 @@ import {
   buildEdgeKey,
   buildEndpointNode,
   buildHandlerNode,
+  ensureNode,
   getEndpointRouteFromFile,
   getExistingDirectories,
   getSourceFile,
   isIgnoredSourceFile,
   isRouteHandlerFile,
-  mergeNode,
   resolveLocalModulePath,
   resolveProjectRoot,
   walkDirectory,
@@ -570,19 +570,4 @@ function hasDefaultModifier(node: ts.HasModifiers): boolean {
   return ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword) ?? false;
 }
 
-function ensureNode(nodes: Node[], nodeIds: Set<string>, node: Node): Node {
-  if (nodeIds.has(node.id)) {
-    const existingNodeIndex = nodes.findIndex((entry) => entry.id === node.id);
-    if (existingNodeIndex === -1) {
-      return node;
-    }
 
-    const mergedNode = mergeNode(nodes[existingNodeIndex], node);
-    nodes[existingNodeIndex] = mergedNode;
-    return mergedNode;
-  }
-
-  nodeIds.add(node.id);
-  nodes.push(node);
-  return node;
-}

@@ -303,6 +303,27 @@ async function runDev(options: DevCliOptions): Promise<void> {
   );
   children.push(serveProcess);
 
+  // Install viewer dependencies if needed
+  const viewerNodeModules = path.join(options.viewerDir, "node_modules");
+  if (!fs.existsSync(viewerNodeModules)) {
+    console.log("Installing viewer dependencies...");
+    const installProcess = spawn("npm", ["install"], {
+      cwd: options.viewerDir,
+      stdio: "inherit",
+      shell: process.platform === "win32",
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      installProcess.once("exit", (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`npm install failed with code ${code}`));
+        }
+      });
+    });
+  }
+
   // Start the viewer dev server
   const viewerProcess = spawn("npm", ["run", "dev"], {
     cwd: options.viewerDir,

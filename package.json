@@ -34,6 +34,10 @@
     "static-analysis",
     "typescript"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jesuscasal23/next-arch-map"
+  },
   "license": "MIT",
   "dependencies": {
     "chokidar": "^3.6.0"

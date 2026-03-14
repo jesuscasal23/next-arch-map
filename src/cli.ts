@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { analyzeProject, diffGraphs } from "./index.js";
 import type { Graph } from "./model.js";
+import { generateDescribeContext } from "./describe.js";
 import {
   captureScreenshots,
   generateParamsTemplate,
@@ -41,8 +42,30 @@ type ScreenshotCliOptions = {
   generateParams: boolean;
 };
 
+type DescribeCliOptions = {
+  graphPath: string;
+  outPath: string;
+  all: boolean;
+};
+
 async function main(): Promise<void> {
   const [commandOrArg, ...rest] = process.argv.slice(2);
+
+  if (commandOrArg === "describe") {
+    const options = parseDescribeArgs(rest);
+    const result = generateDescribeContext({
+      graphPath: path.resolve(options.graphPath),
+      outPath: path.resolve(options.outPath),
+      onlyMissing: !options.all,
+    });
+    console.log(
+      `describe context written to ${options.outPath} (${result.nodeCount} nodes)`,
+    );
+    console.log(
+      `Tell your AI: "Read ${options.outPath} and update the descriptions in ${options.graphPath}"`,
+    );
+    return;
+  }
 
   if (commandOrArg === "dev") {
     const options = parseDevArgs(rest);
@@ -356,6 +379,42 @@ function parseScreenshotArgs(args: string[]): ScreenshotCliOptions {
   return { baseUrl, graphPath, outDir, paramsPath, generateParams };
 }
 
+function parseDescribeArgs(args: string[]): DescribeCliOptions {
+  let graphPath = "arch/graph.full.json";
+  let outPath = "arch/describe-context.md";
+  let all = false;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+
+    if (argument === "--graph" && args[index + 1]) {
+      graphPath = args[index + 1];
+      index += 1;
+      continue;
+    }
+
+    if (argument === "--out" && args[index + 1]) {
+      outPath = args[index + 1];
+      index += 1;
+      continue;
+    }
+
+    if (argument === "--all") {
+      all = true;
+      continue;
+    }
+
+    if (argument === "--help" || argument === "-h") {
+      printHelp();
+      process.exit(0);
+    }
+
+    throw new Error(`Unknown argument: ${argument}`);
+  }
+
+  return { graphPath, outPath, all };
+}
+
 async function runDev(options: DevCliOptions): Promise<void> {
   const children: ChildProcess[] = [];
 
@@ -491,6 +550,7 @@ function logScreenshotSummary(result: { captured: number; skipped: number }): vo
 function printHelp(): void {
   console.log(`next-arch-map analyze [options]
 next-arch-map diff --before <path> --after <path> [--out <path>]
+next-arch-map describe [options]
 next-arch-map screenshot [options]
 next-arch-map serve [options]
 next-arch-map dev [options]
@@ -504,6 +564,11 @@ Diff options:
   --before <path>        Path to the baseline graph JSON.
   --after <path>         Path to the updated graph JSON.
   --out <path>           Output diff JSON path. Defaults to arch/graph.diff.json.
+
+Describe options:
+  --graph <path>         Path to graph JSON. Defaults to arch/graph.full.json.
+  --out <path>           Output context file. Defaults to arch/describe-context.md.
+  --all                  Include all nodes, not just those missing descriptions.
 
 Screenshot options:
   --base-url <url>       Base URL of the running app (e.g. http://localhost:3000).

@@ -16,7 +16,8 @@ export type EdgeKind =
   | "endpoint-db"
   | "endpoint-handler"
   | "page-action"
-  | "action-endpoint";
+  | "action-endpoint"
+  | "db-relation";
 
 export type Edge = {
   from: string;

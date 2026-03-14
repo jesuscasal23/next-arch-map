@@ -15,6 +15,7 @@ const ALL_EDGE_KINDS: EdgeKind[] = [
   "page-endpoint",
   "endpoint-db",
   "endpoint-handler",
+  "db-relation",
 ];
 
 
@@ -498,6 +499,7 @@ function buildFocusedSubgraph(graph: Graph, route: string): Graph {
     "page-endpoint",
     "endpoint-handler",
     "endpoint-db",
+    "db-relation",
   ]);
   const reachableNodeIds = new Set<string>([pageId]);
   const worklist = [pageId];

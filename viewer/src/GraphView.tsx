@@ -44,6 +44,9 @@ const EDGE_COLOR: Record<EdgeKind, string> = {
   "page-endpoint": "#06b6d4",
   "endpoint-db": "#f97316",
   "endpoint-handler": "#22c55e",
+  "page-action": "#8b5cf6",
+  "action-endpoint": "#a855f7",
+  "db-relation": "#94a3b8",
 };
 
 const DIFF_BORDER_COLOR: Record<DiffStatus, string> = {
@@ -182,6 +185,102 @@ function PageNode({ data }: NodeProps) {
   );
 }
 
+type DbColumn = {
+  name: string;
+  type: string;
+  isId?: boolean;
+  isRequired?: boolean;
+  isUnique?: boolean;
+  default?: string;
+};
+
+function DbTableNode({ data }: NodeProps) {
+  const d = data as Record<string, unknown>;
+  const label = String(d.label ?? "");
+  const columns = (d.columns as DbColumn[] | undefined) ?? [];
+
+  return (
+    <div
+      style={{
+        background: "#ffffff",
+        border: "1px solid #cbd5e1",
+        borderRadius: 6,
+        overflow: "hidden",
+        fontFamily: "'Inter', -apple-system, sans-serif",
+        fontSize: 11,
+        minWidth: 220,
+      }}
+    >
+      <Handle type="target" position={Position.Left} style={{ visibility: "hidden" }} />
+      {/* Header */}
+      <div
+        style={{
+          background: "#991b1b",
+          color: "#ffffff",
+          padding: "6px 10px",
+          fontWeight: 700,
+          fontSize: 12,
+          letterSpacing: "0.01em",
+        }}
+      >
+        {label}
+      </div>
+      {/* Columns */}
+      {columns.map((col, i) => (
+        <div
+          key={col.name}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "3px 10px",
+            borderTop: i === 0 ? "none" : "1px solid #f1f5f9",
+            color: "#334155",
+          }}
+        >
+          {col.isId && (
+            <span style={{ fontSize: 10, color: "#eab308" }} title="Primary Key">
+              🔑
+            </span>
+          )}
+          {!col.isId && col.isUnique && (
+            <span style={{ fontSize: 9, color: "#94a3b8" }} title="Unique">
+              U
+            </span>
+          )}
+          {!col.isId && !col.isUnique && (
+            <span style={{ width: 12, display: "inline-block" }} />
+          )}
+          <span style={{ fontWeight: 500, flex: 1 }}>{col.name}</span>
+          <span
+            style={{
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+              fontSize: 10,
+              color: "#64748b",
+            }}
+          >
+            {col.type}
+          </span>
+          {col.isRequired === false && (
+            <span
+              style={{
+                fontSize: 9,
+                background: "#f1f5f9",
+                color: "#94a3b8",
+                borderRadius: 3,
+                padding: "0 3px",
+              }}
+            >
+              ?
+            </span>
+          )}
+        </div>
+      ))}
+      <Handle type="source" position={Position.Right} style={{ visibility: "hidden" }} />
+    </div>
+  );
+}
+
 function DescribedNode({ data }: NodeProps) {
   const d = data as Record<string, unknown>;
   const description = d.description as string | undefined;
@@ -201,6 +300,7 @@ function DescribedNode({ data }: NodeProps) {
 const nodeTypes = {
   pageNode: PageNode,
   describedNode: DescribedNode,
+  dbTableNode: DbTableNode,
 };
 
 export function GraphView(props: GraphViewProps) {
@@ -263,9 +363,17 @@ export function GraphView(props: GraphViewProps) {
     );
     const pageRowHeight = hasScreenshots ? 140 : defaultRowHeight;
 
+    // Compute max db column count for row height
+    const dbNodes = nodesByType.get("db") ?? [];
+    const maxDbColumns = dbNodes.reduce((max, n) => {
+      const cols = Array.isArray(n.meta?.columns) ? (n.meta?.columns as unknown[]).length : 0;
+      return Math.max(max, cols);
+    }, 0);
+    const dbRowHeight = maxDbColumns > 0 ? Math.max(defaultRowHeight, 30 + maxDbColumns * 22) : defaultRowHeight;
+
     activeTypeOrder.forEach((type, columnIndex) => {
       const nodes = nodesByType.get(type) ?? [];
-      const rowHeight = type === "page" ? pageRowHeight : defaultRowHeight;
+      const rowHeight = type === "page" ? pageRowHeight : type === "db" ? dbRowHeight : defaultRowHeight;
       nodes.forEach((node, rowIndex) => {
         const isSelected = node.id === selectedNodeId;
         const status = nodeStatusById?.get(node.id) ?? "unchanged";
@@ -275,12 +383,18 @@ export function GraphView(props: GraphViewProps) {
         const screenshot = isPage ? (node.meta?.screenshot as string | undefined) : undefined;
         const description = node.meta?.description as string | undefined;
         const isDarkText = false;
+        const isDbTable = node.type === "db" && Array.isArray(node.meta?.columns) && (node.meta?.columns as unknown[]).length > 0;
+        const dbColumns = isDbTable ? (node.meta?.columns as DbColumn[]) : undefined;
 
-        const nodeType = isPage
-          ? "pageNode"
-          : description
-            ? "describedNode"
-            : undefined;
+        const nodeType = isDbTable
+          ? "dbTableNode"
+          : isPage
+            ? "pageNode"
+            : description
+              ? "describedNode"
+              : undefined;
+
+        const nodeWidth = isDbTable ? 240 : 200;
 
         flowNodes.push({
           id: node.id,
@@ -290,6 +404,7 @@ export function GraphView(props: GraphViewProps) {
             ...(screenshot ? { screenshot } : {}),
             ...(description ? { description } : {}),
             ...(isDarkText ? { dark: true } : {}),
+            ...(dbColumns ? { columns: dbColumns } : {}),
           },
           position: {
             x: 80 + columnIndex * columnWidth,
@@ -298,27 +413,39 @@ export function GraphView(props: GraphViewProps) {
           sourcePosition: Position.Right,
           targetPosition: Position.Left,
           selectable: true,
-          style: {
-            width: 200,
-            borderRadius: 12,
-            border: `2px ${borderStyle} ${borderColor}`,
-            padding: "10px 14px",
-            background: NODE_COLOR[node.type],
-            color: "#ffffff",
-            fontSize: 12,
-            fontWeight: 600,
-            fontFamily: "'Inter', -apple-system, sans-serif",
-            letterSpacing: "-0.01em",
-            opacity: status === "removed" ? 0.65 : 1,
-            boxShadow: isSelected
-              ? `0 0 0 3px rgba(30, 41, 59, 0.15), 0 8px 24px rgba(0, 0, 0, 0.12)`
-              : status === "added"
-                ? `0 0 0 3px rgba(34, 197, 94, 0.2)`
-                : status === "removed"
-                  ? `0 0 0 3px rgba(239, 68, 68, 0.15)`
+          style: isDbTable
+            ? {
+                width: nodeWidth,
+                borderRadius: 6,
+                padding: 0,
+                background: "transparent",
+                opacity: status === "removed" ? 0.65 : 1,
+                boxShadow: isSelected
+                  ? `0 0 0 3px rgba(30, 41, 59, 0.15), 0 8px 24px rgba(0, 0, 0, 0.12)`
                   : `0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04)`,
-            transition: "opacity 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
-          },
+                transition: "opacity 0.15s ease, box-shadow 0.15s ease",
+              }
+            : {
+                width: nodeWidth,
+                borderRadius: 12,
+                border: `2px ${borderStyle} ${borderColor}`,
+                padding: "10px 14px",
+                background: NODE_COLOR[node.type],
+                color: "#ffffff",
+                fontSize: 12,
+                fontWeight: 600,
+                fontFamily: "'Inter', -apple-system, sans-serif",
+                letterSpacing: "-0.01em",
+                opacity: status === "removed" ? 0.65 : 1,
+                boxShadow: isSelected
+                  ? `0 0 0 3px rgba(30, 41, 59, 0.15), 0 8px 24px rgba(0, 0, 0, 0.12)`
+                  : status === "added"
+                    ? `0 0 0 3px rgba(34, 197, 94, 0.2)`
+                    : status === "removed"
+                      ? `0 0 0 3px rgba(239, 68, 68, 0.15)`
+                      : `0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04)`,
+                transition: "opacity 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
+              },
         });
       });
     });

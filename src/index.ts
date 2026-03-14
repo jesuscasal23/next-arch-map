@@ -1,5 +1,6 @@
 import { analyzeEndpointsToDb } from "./analyzers/endpointsToDb.js";
 import { analyzePagesToEndpoints } from "./analyzers/pagesToEndpoints.js";
+import { analyzePrismaSchema } from "./analyzers/prismaSchema.js";
 import type { Graph } from "./model.js";
 import { mergePartial } from "./merge.js";
 
@@ -28,7 +29,9 @@ export async function analyzeProject(options: AnalyzeProjectOptions): Promise<Gr
     dbClientIdentifiers: options.dbClientIdentifiers,
   });
 
-  return mergePartial(pagesToEndpoints, endpointsToDb);
+  const prismaSchema = await analyzePrismaSchema(options.projectRoot);
+
+  return mergePartial(mergePartial(pagesToEndpoints, endpointsToDb), prismaSchema);
 }
 
 export { diffGraphs } from "./diff.js";
@@ -36,6 +39,8 @@ export type { DiffStatus, EdgeDiff, GraphDiff, NodeDiff } from "./diff.js";
 export type { Edge, EdgeKind, Graph, Node, NodeType } from "./model.js";
 export { analyzePagesToEndpoints } from "./analyzers/pagesToEndpoints.js";
 export { analyzeEndpointsToDb } from "./analyzers/endpointsToDb.js";
+export { analyzePrismaSchema } from "./analyzers/prismaSchema.js";
 export { mergeGraphs, mergePartial } from "./merge.js";
 export { getDbModelsForPage, getEndpointsForPage, getPagesForDbModel } from "./query.js";
+export { generateDescribeContext } from "./describe.js";
 export { captureScreenshots, generateParamsTemplate } from "./screenshot.js";

@@ -39,8 +39,15 @@ export async function analyzeProject(options: AnalyzeProjectOptions): Promise<Gr
   return mergePartial(mergePartial(pagesToEndpoints, endpointsToDb), pagesToUi);
 }
 
+export { diffGraphs } from "./diff.js";
+export type { DiffStatus, EdgeDiff, GraphDiff, NodeDiff } from "./diff.js";
 export type { Edge, EdgeKind, Graph, Node, NodeType } from "./model.js";
 export { analyzePagesToEndpoints } from "./analyzers/pagesToEndpoints.js";
 export { analyzeEndpointsToDb } from "./analyzers/endpointsToDb.js";
 export { analyzePagesToUi } from "./analyzers/pagesToUi.js";
 export { mergeGraphs, mergePartial } from "./merge.js";
+export {
+  getDbModelsForPage,
+  getEndpointsForPage,
+  getPagesForDbModel,
+} from "./query.js";

@@ -18,12 +18,14 @@
   },
   "files": [
     "dist",
+    "viewer",
     "README.md",
     "examples"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "check": "tsc --noEmit -p tsconfig.json"
+    "check": "tsc --noEmit -p tsconfig.json",
+    "dev": "node dist/cli.js dev"
   },
   "keywords": [
     "nextjs",
@@ -33,6 +35,9 @@
     "typescript"
   ],
   "license": "MIT",
+  "dependencies": {
+    "chokidar": "^3.6.0"
+  },
   "devDependencies": {
     "@types/node": "^20.19.0",
     "typescript": "^5.8.2"

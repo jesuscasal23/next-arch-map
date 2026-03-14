@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+import type { Edge, Node } from "./model.js";
 
 const ROUTE_GROUP_PATTERN = /^\(.*\)$/;
 const SOURCE_FILE_PATTERN = /\.(ts|tsx|js|jsx)$/;
@@ -263,35 +264,121 @@ export function getStringLiteralValue(expression: ts.Expression): string | null 
   return null;
 }
 
-export function buildPageNode(route: string) {
+export function mergeMeta(
+  baseMeta?: Record<string, any>,
+  nextMeta?: Record<string, any>
+): Record<string, any> | undefined {
+  if (!baseMeta) {
+    return nextMeta;
+  }
+
+  if (!nextMeta) {
+    return baseMeta;
+  }
+
+  return {
+    ...baseMeta,
+    ...nextMeta,
+  };
+}
+
+export function mergeNode(existingNode: Node, nextNode: Node): Node {
+  return {
+    ...existingNode,
+    ...nextNode,
+    meta: mergeMeta(existingNode.meta, nextNode.meta),
+  };
+}
+
+export function mergeEdge(existingEdge: Edge, nextEdge: Edge): Edge {
+  return {
+    ...existingEdge,
+    ...nextEdge,
+    meta: mergeMeta(existingEdge.meta, nextEdge.meta),
+  };
+}
+
+export function buildPageNode(route: string, filePath: string) {
   return {
     id: `page:${route}`,
     type: "page" as const,
     label: route,
+    meta: {
+      filePath,
+      route,
+    },
   };
 }
 
-export function buildEndpointNode(endpoint: string, method?: string) {
+export function buildEndpointNode(endpoint: string, filePath: string, method?: string) {
   return {
     id: `endpoint:${endpoint}`,
     type: "endpoint" as const,
     label: endpoint,
-    meta: method ? { method } : undefined,
+    meta: {
+      filePath,
+      route: endpoint,
+      ...(method ? { method } : {}),
+    },
   };
 }
 
-export function buildDbNode(modelName: string) {
+export function buildHandlerNode(endpoint: string, filePath: string, method?: string) {
+  const label = method ? `${endpoint}#${method}` : endpoint;
+
+  return {
+    id: method ? `handler:${endpoint}:${method}` : `handler:${endpoint}`,
+    type: "handler" as const,
+    label,
+    meta: {
+      filePath,
+      route: endpoint,
+      ...(method ? { method } : {}),
+    },
+  };
+}
+
+export function buildActionNode(
+  pageRoute: string,
+  actionId: string,
+  filePath: string,
+  extraMeta?: Record<string, unknown>
+) {
+  const label = actionId;
+
+  return {
+    id: `action:${pageRoute}:${actionId}`,
+    type: "action" as const,
+    label,
+    meta: {
+      filePath,
+      route: pageRoute,
+      actionId,
+      ...(extraMeta ?? {}),
+    },
+  };
+}
+
+export function buildDbNode(modelName: string, filePath: string) {
   return {
     id: `db:${modelName}`,
     type: "db" as const,
     label: modelName,
+    meta: {
+      filePath,
+      model: modelName,
+    },
   };
 }
 
-export function buildUiNode(componentName: string) {
+export function buildUiNode(componentName: string, filePath: string) {
   return {
     id: `ui:${componentName}`,
     type: "ui" as const,
     label: componentName,
+    meta: {
+      filePath,
+      component: componentName,
+    },
   };
 }

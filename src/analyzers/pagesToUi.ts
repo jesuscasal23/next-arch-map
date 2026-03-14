@@ -9,6 +9,7 @@ import {
   getPageRouteFromFile,
   getSourceFile,
   isPageFile,
+  mergeNode,
   resolveLocalModulePath,
   resolveProjectRoot,
   walkDirectory,
@@ -18,6 +19,11 @@ type AnalyzePagesToUiOptions = {
   projectRoot: string;
   appDirs?: string[];
   uiImportPathGlobs?: string[];
+};
+
+type UiComponentUsage = {
+  componentName: string;
+  filePath: string;
 };
 
 const DEFAULT_APP_DIRS = ["app", "src/app"];
@@ -51,11 +57,15 @@ export async function analyzePagesToUi(
       }
 
       const route = getPageRouteFromFile(appDir, filePath);
-      const pageNode = ensureNode(nodes, nodeIds, buildPageNode(route));
-      const componentNames = collectUiComponentNames(filePath, projectRoot, uiPathMatchers);
+      const pageNode = ensureNode(nodes, nodeIds, buildPageNode(route, filePath));
+      const components = collectUiComponentUsages(filePath, projectRoot, uiPathMatchers);
 
-      for (const componentName of componentNames) {
-        const uiNode = ensureNode(nodes, nodeIds, buildUiNode(componentName));
+      for (const component of components) {
+        const uiNode = ensureNode(
+          nodes,
+          nodeIds,
+          buildUiNode(component.componentName, component.filePath)
+        );
         const edgeKey = buildEdgeKey(pageNode.id, uiNode.id, "page-ui");
 
         if (edgeKeys.has(edgeKey)) {
@@ -83,17 +93,17 @@ export async function analyzePagesToUi(
   };
 }
 
-function collectUiComponentNames(
+function collectUiComponentUsages(
   pageFilePath: string,
   projectRoot: string,
   uiPathMatchers: RegExp[]
-): string[] {
+): UiComponentUsage[] {
   const sourceFile = getSourceFile(pageFilePath);
   if (!sourceFile) {
     return [];
   }
 
-  const componentNames = new Set<string>();
+  const componentFilePaths = new Map<string, string>();
 
   for (const statement of sourceFile.statements) {
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
@@ -111,20 +121,24 @@ function collectUiComponentNames(
       continue;
     }
 
+    const componentFilePath = resolvedImportPath ?? pageFilePath;
+
     if (importClause.name && isUiComponentName(importClause.name.text)) {
-      componentNames.add(importClause.name.text);
+      componentFilePaths.set(importClause.name.text, componentFilePath);
     }
 
     if (importClause.namedBindings && ts.isNamedImports(importClause.namedBindings)) {
       for (const element of importClause.namedBindings.elements) {
         if (!element.isTypeOnly && isUiComponentName(element.name.text)) {
-          componentNames.add(element.name.text);
+          componentFilePaths.set(element.name.text, componentFilePath);
         }
       }
     }
   }
 
-  return [...componentNames].sort((left, right) => left.localeCompare(right));
+  return [...componentFilePaths.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([componentName, filePath]) => ({ componentName, filePath }));
 }
 
 function isUiLikeImport(
@@ -180,7 +194,14 @@ function globToRegExp(glob: string): RegExp {
 
 function ensureNode(nodes: Node[], nodeIds: Set<string>, node: Node): Node {
   if (nodeIds.has(node.id)) {
-    return nodes.find((entry) => entry.id === node.id) ?? node;
+    const existingNodeIndex = nodes.findIndex((entry) => entry.id === node.id);
+    if (existingNodeIndex === -1) {
+      return node;
+    }
+
+    const mergedNode = mergeNode(nodes[existingNodeIndex], node);
+    nodes[existingNodeIndex] = mergedNode;
+    return mergedNode;
   }
 
   nodeIds.add(node.id);

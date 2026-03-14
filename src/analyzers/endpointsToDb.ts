@@ -5,11 +5,13 @@ import {
   buildDbNode,
   buildEdgeKey,
   buildEndpointNode,
+  buildHandlerNode,
   getEndpointRouteFromFile,
   getExistingDirectories,
   getSourceFile,
   isIgnoredSourceFile,
   isRouteHandlerFile,
+  mergeNode,
   resolveLocalModulePath,
   resolveProjectRoot,
   walkDirectory,
@@ -58,7 +60,24 @@ type AnalysisState = {
   moduleCache: Map<string, ModuleInfo>;
   sourceFileCache: Map<string, ts.SourceFile>;
   visitedDeclarationKeys: Set<string>;
-  dbUsageByModel: Map<string, string | undefined>;
+  dbUsageByModel: Map<
+    string,
+    {
+      actionName?: string;
+      filePath: string;
+    }
+  >;
+};
+
+type EndpointAnalysis = {
+  availableMethods: Set<string>;
+  dbUsageByModel: Map<
+    string,
+    {
+      actionName?: string;
+      filePath: string;
+    }
+  >;
 };
 
 const DEFAULT_API_DIRS = ["app", "src/app", "app/api", "src/app/api", "src/server", "src/api"];
@@ -87,7 +106,7 @@ export async function analyzeEndpointsToDb(
 
       seenRouteFiles.add(filePath);
       const endpointPath = getEndpointRouteFromFile(scanRoot, filePath);
-      const dbUsageByModel = analyzeEndpoint(
+      const { availableMethods, dbUsageByModel } = analyzeEndpoint(
         filePath,
         projectRoot,
         moduleCache,
@@ -95,14 +114,32 @@ export async function analyzeEndpointsToDb(
         dbClientIdentifiers
       );
 
-      if (dbUsageByModel.size === 0) {
-        continue;
+      const endpointNode = ensureNode(nodes, nodeIds, buildEndpointNode(endpointPath, filePath));
+      const handlerMethods = availableMethods.size > 0 ? [...availableMethods] : [undefined];
+
+      for (const methodName of handlerMethods) {
+        const handlerNode = ensureNode(
+          nodes,
+          nodeIds,
+          buildHandlerNode(endpointPath, filePath, methodName)
+        );
+        const edgeKey = buildEdgeKey(endpointNode.id, handlerNode.id, "endpoint-handler");
+
+        if (edgeKeys.has(edgeKey)) {
+          continue;
+        }
+
+        edgeKeys.add(edgeKey);
+        edges.push({
+          from: endpointNode.id,
+          to: handlerNode.id,
+          kind: "endpoint-handler",
+          meta: methodName ? { method: methodName } : undefined,
+        });
       }
 
-      const endpointNode = ensureNode(nodes, nodeIds, buildEndpointNode(endpointPath));
-
-      for (const [modelName, actionName] of dbUsageByModel) {
-        const dbNode = ensureNode(nodes, nodeIds, buildDbNode(modelName));
+      for (const [modelName, dbUsage] of dbUsageByModel) {
+        const dbNode = ensureNode(nodes, nodeIds, buildDbNode(modelName, dbUsage.filePath));
         const edgeKey = buildEdgeKey(endpointNode.id, dbNode.id, "endpoint-db");
 
         if (edgeKeys.has(edgeKey)) {
@@ -114,7 +151,7 @@ export async function analyzeEndpointsToDb(
           from: endpointNode.id,
           to: dbNode.id,
           kind: "endpoint-db",
-          meta: actionName ? { action: actionName } : undefined,
+          meta: dbUsage.actionName ? { action: dbUsage.actionName } : undefined,
         });
       }
     }
@@ -137,23 +174,28 @@ function analyzeEndpoint(
   moduleCache: Map<string, ModuleInfo>,
   sourceFileCache: Map<string, ts.SourceFile>,
   dbClientIdentifiers: Set<string>
-): Map<string, string | undefined> {
+): EndpointAnalysis {
   const state: AnalysisState = {
     projectRoot,
     moduleCache,
     sourceFileCache,
     visitedDeclarationKeys: new Set<string>(),
-    dbUsageByModel: new Map<string, string | undefined>(),
+    dbUsageByModel: new Map(),
   };
+  const availableMethods = new Set<string>();
 
   for (const methodName of ROUTE_METHOD_EXPORTS) {
     const resolvedDeclaration = resolveExportReference(routeFilePath, methodName, state);
     if (resolvedDeclaration) {
+      availableMethods.add(methodName);
       analyzeDeclaration(resolvedDeclaration, state, new Set(dbClientIdentifiers));
     }
   }
 
-  return state.dbUsageByModel;
+  return {
+    availableMethods,
+    dbUsageByModel: state.dbUsageByModel,
+  };
 }
 
 function analyzeDeclaration(
@@ -178,9 +220,17 @@ function visitNode(
   if (ts.isCallExpression(node)) {
     const dbUsage = parseDbUsage(node, activeDbClients);
     if (dbUsage) {
-      const existingAction = state.dbUsageByModel.get(dbUsage.modelName);
-      if (!existingAction) {
-        state.dbUsageByModel.set(dbUsage.modelName, dbUsage.actionName);
+      const existingUsage = state.dbUsageByModel.get(dbUsage.modelName);
+      if (!existingUsage) {
+        state.dbUsageByModel.set(dbUsage.modelName, {
+          actionName: dbUsage.actionName,
+          filePath,
+        });
+      } else if (!existingUsage.actionName && dbUsage.actionName) {
+        state.dbUsageByModel.set(dbUsage.modelName, {
+          ...existingUsage,
+          actionName: dbUsage.actionName,
+        });
       }
     }
 
@@ -522,7 +572,14 @@ function hasDefaultModifier(node: ts.HasModifiers): boolean {
 
 function ensureNode(nodes: Node[], nodeIds: Set<string>, node: Node): Node {
   if (nodeIds.has(node.id)) {
-    return nodes.find((entry) => entry.id === node.id) ?? node;
+    const existingNodeIndex = nodes.findIndex((entry) => entry.id === node.id);
+    if (existingNodeIndex === -1) {
+      return node;
+    }
+
+    const mergedNode = mergeNode(nodes[existingNodeIndex], node);
+    nodes[existingNodeIndex] = mergedNode;
+    return mergedNode;
   }
 
   nodeIds.add(node.id);

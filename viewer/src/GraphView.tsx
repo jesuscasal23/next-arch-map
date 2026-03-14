@@ -413,6 +413,7 @@ export function GraphView(props: GraphViewProps) {
           sourcePosition: Position.Right,
           targetPosition: Position.Left,
           selectable: true,
+          draggable: isDbTable,
           style: isDbTable
             ? {
                 width: nodeWidth,
@@ -550,7 +551,7 @@ export function GraphView(props: GraphViewProps) {
         onNodeMouseEnter={handleNodeMouseEnter}
         onNodeMouseLeave={handleNodeMouseLeave}
         onPaneClick={() => onSelectNode(null)}
-        nodesDraggable={false}
+        nodesDraggable
         nodesConnectable={false}
         elementsSelectable
         proOptions={{ hideAttribution: true }}

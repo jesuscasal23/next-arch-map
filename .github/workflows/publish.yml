@@ -7,11 +7,14 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
@@ -22,21 +25,17 @@ jobs:
 
       - run: npm run build
 
-      - name: Check if version changed
-        id: version
-        run: |
-          PACKAGE_VERSION=$(node -p "require('./package.json').version")
-          PUBLISHED_VERSION=$(npm view next-arch-map version 2>/dev/null || echo "0.0.0")
-          if [ "$PACKAGE_VERSION" = "$PUBLISHED_VERSION" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "Version $PACKAGE_VERSION already published, skipping."
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-            echo "Publishing $PACKAGE_VERSION (current: $PUBLISHED_VERSION)"
-          fi
-
       - name: Publish
-        if: steps.version.outputs.skip == 'false'
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Bump version for next release
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          npm version patch --no-git-tag-version
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          git add package.json package-lock.json
+          git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
+          git push

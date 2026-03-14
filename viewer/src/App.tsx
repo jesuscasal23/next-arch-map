@@ -20,46 +20,6 @@ const ALL_EDGE_KINDS: EdgeKind[] = [
   "action-endpoint",
 ];
 
-type LayerPreset = "user-flow" | "data-flow" | "full-flow";
-
-const USER_FLOW_EDGE_KINDS: EdgeKind[] = [
-  "page-action",
-  "action-endpoint",
-  "page-endpoint",
-];
-
-const DATA_FLOW_EDGE_KINDS: EdgeKind[] = [
-  "endpoint-handler",
-  "endpoint-db",
-];
-
-const FULL_FLOW_EDGE_KINDS: EdgeKind[] = [
-  "page-endpoint",
-  "endpoint-db",
-  "endpoint-handler",
-  "page-action",
-  "action-endpoint",
-];
-
-const USER_FLOW_NODE_TYPES: NodeType[] = [
-  "page",
-  "action",
-  "endpoint",
-];
-
-const DATA_FLOW_NODE_TYPES: NodeType[] = [
-  "endpoint",
-  "handler",
-  "db",
-];
-
-const FULL_FLOW_NODE_TYPES: NodeType[] = [
-  "page",
-  "action",
-  "endpoint",
-  "handler",
-  "db",
-];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object";
@@ -110,7 +70,6 @@ export function App() {
   );
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [activePreset, setActivePreset] = useState<LayerPreset | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
@@ -229,7 +188,6 @@ export function App() {
   };
 
   const toggleNodeType = (type: NodeType) => {
-    setActivePreset(null);
     setVisibleNodeTypes((prev) => {
       const next = new Set(prev);
       if (next.has(type)) next.delete(type);
@@ -239,31 +197,12 @@ export function App() {
   };
 
   const toggleEdgeKind = (kind: EdgeKind) => {
-    setActivePreset(null);
     setVisibleEdgeKinds((prev) => {
       const next = new Set(prev);
       if (next.has(kind)) next.delete(kind);
       else next.add(kind);
       return next;
     });
-  };
-
-  const applyPreset = (preset: LayerPreset) => {
-    setActivePreset(preset);
-    if (preset === "user-flow") {
-      setVisibleNodeTypes(new Set(USER_FLOW_NODE_TYPES));
-      setVisibleEdgeKinds(new Set(USER_FLOW_EDGE_KINDS));
-      return;
-    }
-
-    if (preset === "data-flow") {
-      setVisibleNodeTypes(new Set(DATA_FLOW_NODE_TYPES));
-      setVisibleEdgeKinds(new Set(DATA_FLOW_EDGE_KINDS));
-      return;
-    }
-
-    setVisibleNodeTypes(new Set(FULL_FLOW_NODE_TYPES));
-    setVisibleEdgeKinds(new Set(FULL_FLOW_EDGE_KINDS));
   };
 
   const handlePageToDbQuery = async () => {
@@ -316,12 +255,6 @@ export function App() {
       setFocusedPageRoute(null);
     }
   }, [baseGraph, focusedPageRoute, pageRoutes]);
-
-  const presets: { key: LayerPreset; label: string }[] = [
-    { key: "user-flow", label: "User Flow" },
-    { key: "data-flow", label: "Data Flow" },
-    { key: "full-flow", label: "Full" },
-  ];
 
   return (
     <div className="flex h-screen bg-gradient-to-b from-slate-50 to-slate-100">
@@ -437,29 +370,6 @@ export function App() {
               </select>
             </div>
           )}
-
-          {/* Presets */}
-          <div>
-            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
-              View preset
-            </h3>
-            <div className="flex gap-1.5">
-              {presets.map((preset) => (
-                <button
-                  key={preset.key}
-                  type="button"
-                  onClick={() => applyPreset(preset.key)}
-                  className={`flex-1 px-2 py-1.5 rounded-md text-[11px] font-medium transition-colors cursor-pointer ${
-                    activePreset === preset.key
-                      ? "bg-indigo-600 text-white shadow-sm"
-                      : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300"
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-          </div>
 
           {/* Filters */}
           <Filters

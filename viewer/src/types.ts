@@ -2,8 +2,7 @@ export type NodeType =
   | "page"
   | "endpoint"
   | "db"
-  | "handler"
-  | "action";
+  | "handler";
 
 export type Node = {
   id: string;

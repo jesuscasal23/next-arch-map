@@ -15,7 +15,6 @@ const NODE_TYPE_COLORS: Record<NodeType, string> = {
   page: "bg-blue-500",
   endpoint: "bg-emerald-600",
   handler: "bg-teal-500",
-  action: "bg-amber-400",
   db: "bg-red-600",
 };
 

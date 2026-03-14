@@ -31,7 +31,6 @@ const NODE_COLOR: Record<NodeType, string> = {
   endpoint: "#059669",
   db: "#dc2626",
   handler: "#14b8a6",
-  action: "#fbbf24",
 };
 
 const NODE_BORDER: Record<NodeType, string> = {
@@ -39,15 +38,12 @@ const NODE_BORDER: Record<NodeType, string> = {
   endpoint: "#047857",
   db: "#b91c1c",
   handler: "#0d9488",
-  action: "#f59e0b",
 };
 
 const EDGE_COLOR: Record<EdgeKind, string> = {
   "page-endpoint": "#06b6d4",
   "endpoint-db": "#f97316",
   "endpoint-handler": "#22c55e",
-  "page-action": "#eab308",
-  "action-endpoint": "#a855f7",
 };
 
 const DIFF_BORDER_COLOR: Record<DiffStatus, string> = {
@@ -241,7 +237,7 @@ export function GraphView(props: GraphViewProps) {
 
   // Compute layout without hover state — this is the expensive part
   const { flowNodes: baseFlowNodes, flowEdges: baseFlowEdges } = useMemo(() => {
-    const typeOrder: NodeType[] = ["page", "action", "endpoint", "handler", "db"];
+    const typeOrder: NodeType[] = ["page", "endpoint", "handler", "db"];
     const visibleNodes = graph.nodes.filter((node) => visibleNodeTypes.has(node.type));
     const visibleNodeIds = new Set(visibleNodes.map((node) => node.id));
     const nodesByType = new Map<NodeType, typeof visibleNodes>(
@@ -278,7 +274,7 @@ export function GraphView(props: GraphViewProps) {
         const isPage = node.type === "page";
         const screenshot = isPage ? (node.meta?.screenshot as string | undefined) : undefined;
         const description = node.meta?.description as string | undefined;
-        const isDarkText = node.type === "action";
+        const isDarkText = false;
 
         const nodeType = isPage
           ? "pageNode"
@@ -308,7 +304,7 @@ export function GraphView(props: GraphViewProps) {
             border: `2px ${borderStyle} ${borderColor}`,
             padding: "10px 14px",
             background: NODE_COLOR[node.type],
-            color: node.type === "action" ? "#1e293b" : "#ffffff",
+            color: "#ffffff",
             fontSize: 12,
             fontWeight: 600,
             fontFamily: "'Inter', -apple-system, sans-serif",

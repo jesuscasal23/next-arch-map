@@ -14,6 +14,7 @@ import {
   getStringLiteralValue,
   isIgnoredSourceFile,
   isPageFile,
+  resolveLocalModulePath,
   resolveProjectRoot,
   walkDirectory,
 } from "../utils.js";
@@ -82,16 +83,25 @@ export async function analyzePagesToEndpoints(
           continue;
         }
 
-        const httpCalls = collectHttpCalls(sourceFile, httpClientIdentifiers, httpClientMethods);
-
         // Non-page files (route handlers, layouts, helpers) under app/ only
         // contribute endpoint nodes without creating fake page flows.
         if (!isPageFile(filePath)) {
+          const httpCalls = collectHttpCalls(sourceFile, httpClientIdentifiers, httpClientMethods);
           for (const call of httpCalls) {
             ensureNode(nodes, nodeIds, buildEndpointNode(call.endpoint, filePath));
           }
           continue;
         }
+
+        // For page files, follow imports transitively to find HTTP calls
+        // in hooks, utilities, and other local modules.
+        const httpCalls = collectHttpCallsTransitively(
+          filePath,
+          projectRoot,
+          httpClientIdentifiers,
+          httpClientMethods,
+          sourceFileCache,
+        );
 
         const route = getPageRouteFromFile(appDir, filePath);
         ensureNode(nodes, nodeIds, buildPageNode(route, filePath));
@@ -190,6 +200,73 @@ export async function analyzePagesToEndpoints(
         left.to.localeCompare(right.to),
     ),
   };
+}
+
+function collectImportSpecifiers(sourceFile: ts.SourceFile): string[] {
+  const specifiers: string[] = [];
+
+  for (const statement of sourceFile.statements) {
+    if (
+      ts.isImportDeclaration(statement) &&
+      statement.moduleSpecifier &&
+      ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      specifiers.push(statement.moduleSpecifier.text);
+    }
+
+    // Re-exports: export { foo } from "./bar"
+    if (
+      ts.isExportDeclaration(statement) &&
+      statement.moduleSpecifier &&
+      ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      specifiers.push(statement.moduleSpecifier.text);
+    }
+  }
+
+  return specifiers;
+}
+
+function collectHttpCallsTransitively(
+  filePath: string,
+  projectRoot: string,
+  httpClientIdentifiers: Set<string>,
+  httpClientMethods: Set<string>,
+  sourceFileCache: Map<string, ts.SourceFile>,
+  visited?: Set<string>,
+): HttpCall[] {
+  const resolvedPath = path.resolve(filePath);
+  const seen = visited ?? new Set<string>();
+  if (seen.has(resolvedPath)) {
+    return [];
+  }
+  seen.add(resolvedPath);
+
+  const sourceFile = getSourceFile(filePath, sourceFileCache);
+  if (!sourceFile) {
+    return [];
+  }
+
+  const calls = collectHttpCalls(sourceFile, httpClientIdentifiers, httpClientMethods);
+
+  for (const specifier of collectImportSpecifiers(sourceFile)) {
+    const resolved = resolveLocalModulePath(filePath, specifier, projectRoot);
+    if (!resolved) {
+      continue;
+    }
+
+    const transitiveCalls = collectHttpCallsTransitively(
+      resolved,
+      projectRoot,
+      httpClientIdentifiers,
+      httpClientMethods,
+      sourceFileCache,
+      seen,
+    );
+    calls.push(...transitiveCalls);
+  }
+
+  return calls;
 }
 
 function collectHttpCalls(

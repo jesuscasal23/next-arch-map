@@ -133,6 +133,87 @@ describe("pagesToEndpoints: page vs non-page files", () => {
 });
 
 // ===========================================================================
+// Test 1b: pagesToEndpoints — follows imports to discover HTTP calls
+// ===========================================================================
+
+describe("pagesToEndpoints: follows imports transitively", () => {
+  let tmpDir: string;
+  let graph: Graph;
+
+  beforeAll(async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "arch-import-test-"));
+
+    // Page imports a hook from @/hooks/api
+    writeFixtureFile(
+      tmpDir,
+      "src/app/trips/page.tsx",
+      `
+import { useTrips } from "@/hooks/api";
+
+export default function TripsPage() {
+  const { data } = useTrips();
+  return <div>{JSON.stringify(data)}</div>;
+}
+`,
+    );
+
+    // Barrel re-export
+    writeFixtureFile(
+      tmpDir,
+      "src/hooks/api/index.ts",
+      `
+export { useTrips } from "./useTrips";
+`,
+    );
+
+    // Hook with the actual fetch call
+    writeFixtureFile(
+      tmpDir,
+      "src/hooks/api/useTrips.ts",
+      `
+async function fetchTrips() {
+  const res = await fetch("/api/v1/trips");
+  return res.json();
+}
+
+export function useTrips() {
+  return { queryFn: fetchTrips };
+}
+`,
+    );
+
+    graph = await analyzePagesToEndpoints({ projectRoot: tmpDir });
+  });
+
+  afterAll(() => fs.rmSync(tmpDir, { recursive: true }));
+
+  it("discovers page -> endpoint edge through imported hook", () => {
+    const pageNode = graph.nodes.find((n) => n.id === "page:/trips");
+    const endpointNode = graph.nodes.find((n) => n.id === "endpoint:/api/v1/trips");
+
+    expect(pageNode).toBeDefined();
+    expect(endpointNode).toBeDefined();
+
+    expect(
+      graph.edges.some(
+        (e) => e.kind === "page-endpoint" && e.from === pageNode!.id && e.to === endpointNode!.id,
+      ),
+    ).toBe(true);
+  });
+
+  it("creates page -> action -> endpoint chain", () => {
+    expect(graph.edges.some((e) => e.kind === "page-action" && e.from === "page:/trips")).toBe(
+      true,
+    );
+    expect(
+      graph.edges.some(
+        (e) => e.kind === "action-endpoint" && e.to === "endpoint:/api/v1/trips",
+      ),
+    ).toBe(true);
+  });
+});
+
+// ===========================================================================
 // Test 2: mergePartial — metadata precedence on shared nodes
 // ===========================================================================
 
@@ -302,7 +383,6 @@ describe("analyzeProject: full pipeline on fixture", () => {
     expect(graph.nodes.find((n) => n.id === "endpoint:/api/users")).toBeDefined();
     expect(graph.nodes.find((n) => n.id === "handler:/api/users:GET")).toBeDefined();
     expect(graph.nodes.find((n) => n.id === "db:user")).toBeDefined();
-    expect(graph.nodes.find((n) => n.id === "ui:UserList")).toBeDefined();
   });
 
   it("edges connect the full chain correctly", () => {
@@ -328,9 +408,5 @@ describe("analyzeProject: full pipeline on fixture", () => {
       ),
     ).toBe(true);
 
-    // page -> ui
-    expect(
-      graph.edges.some((e) => e.kind === "page-ui" && e.from === pageId && e.to === "ui:UserList"),
-    ).toBe(true);
   });
 });

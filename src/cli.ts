@@ -352,14 +352,12 @@ function logAnalyzeSummary(graph: Graph, outputFile: string, projectRoot: string
   const pageCount = graph.nodes.filter((node) => node.type === "page").length;
   const endpointCount = graph.nodes.filter((node) => node.type === "endpoint").length;
   const dbCount = graph.nodes.filter((node) => node.type === "db").length;
-  const uiCount = graph.nodes.filter((node) => node.type === "ui").length;
 
   console.log(
     [
       `pages=${pageCount}`,
       `endpoints=${endpointCount}`,
       `db=${dbCount}`,
-      `ui=${uiCount}`,
       `edges=${graph.edges.length}`,
       `file=${path.relative(projectRoot, outputFile)}`,
     ].join(" "),

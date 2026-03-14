@@ -384,14 +384,3 @@ export function buildDbNode(modelName: string, filePath: string) {
   };
 }
 
-export function buildUiNode(componentName: string, filePath: string) {
-  return {
-    id: `ui:${componentName}`,
-    type: "ui" as const,
-    label: componentName,
-    meta: {
-      filePath,
-      component: componentName,
-    },
-  };
-}

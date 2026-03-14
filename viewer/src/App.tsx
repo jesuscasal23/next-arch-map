@@ -11,12 +11,10 @@ const ALL_NODE_TYPES: NodeType[] = [
   "handler",
   "action",
   "db",
-  "ui",
 ];
 const ALL_EDGE_KINDS: EdgeKind[] = [
   "page-endpoint",
   "endpoint-db",
-  "page-ui",
   "endpoint-handler",
   "page-action",
   "action-endpoint",
@@ -38,7 +36,6 @@ const DATA_FLOW_EDGE_KINDS: EdgeKind[] = [
 const FULL_FLOW_EDGE_KINDS: EdgeKind[] = [
   "page-endpoint",
   "endpoint-db",
-  "page-ui",
   "endpoint-handler",
   "page-action",
   "action-endpoint",
@@ -62,7 +59,6 @@ const FULL_FLOW_NODE_TYPES: NodeType[] = [
   "endpoint",
   "handler",
   "db",
-  "ui",
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -388,6 +384,15 @@ export function App() {
               </Switch.Root>
             </div>
             {useServer && (
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((prev) => !prev)}
+                className="text-[11px] text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+              >
+                {showAdvanced ? "Hide" : "Advanced"}
+              </button>
+            )}
+            {useServer && showAdvanced && (
               <input
                 type="text"
                 value={serverUrl}
@@ -584,7 +589,6 @@ function buildFocusedSubgraph(graph: Graph, route: string): Graph {
     "page-endpoint",
     "endpoint-handler",
     "endpoint-db",
-    "page-ui",
   ]);
   const reachableNodeIds = new Set<string>([pageId]);
   const worklist = [pageId];

@@ -16,7 +16,6 @@ const NODE_TYPE_COLORS: Record<NodeType, string> = {
   handler: "bg-teal-500",
   action: "bg-amber-400",
   db: "bg-red-600",
-  ui: "bg-orange-500",
 };
 
 export function Filters(props: FiltersProps) {

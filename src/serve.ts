@@ -42,8 +42,6 @@ export async function serve(options: ServeOptions): Promise<void> {
       const handlerCount = currentGraph.nodes.filter((node) => node.type === "handler").length;
       const actionCount = currentGraph.nodes.filter((node) => node.type === "action").length;
       const dbCount = currentGraph.nodes.filter((node) => node.type === "db").length;
-      const uiCount = currentGraph.nodes.filter((node) => node.type === "ui").length;
-
       console.log(
         [
           "mode=serve",
@@ -52,7 +50,6 @@ export async function serve(options: ServeOptions): Promise<void> {
           `endpoints=${endpointCount}`,
           `handlers=${handlerCount}`,
           `db=${dbCount}`,
-          `ui=${uiCount}`,
           `nodes=${currentGraph.nodes.length}`,
           `edges=${currentGraph.edges.length}`,
         ].join(" "),

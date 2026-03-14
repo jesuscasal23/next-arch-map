@@ -1,6 +1,6 @@
 {
   "name": "next-arch-map",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Static analyzer that builds a multi-layer architecture graph for Next.js-style apps.",
   "type": "module",
   "bin": {

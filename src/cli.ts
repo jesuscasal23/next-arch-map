@@ -255,7 +255,7 @@ function parseDevArgs(args: string[]): DevCliOptions {
 
     if (!viewerDir) {
       throw new Error(
-        "Could not find viewer directory. Provide --viewer-dir <path> pointing to the viewer app."
+        "Could not find viewer directory. Provide --viewer-dir <path> pointing to the viewer app.",
       );
     }
   }
@@ -299,7 +299,7 @@ async function runDev(options: DevCliOptions): Promise<void> {
       String(options.port),
       ...(options.appDirs ?? []).flatMap((dir) => ["--app-dir", dir]),
     ],
-    { stdio: "inherit" }
+    { stdio: "inherit" },
   );
   children.push(serveProcess);
 
@@ -333,11 +333,13 @@ async function runDev(options: DevCliOptions): Promise<void> {
   children.push(viewerProcess);
 
   // If either process exits, tear down the other
-  const onExit = (name: string) => (code: number | null): void => {
-    console.log(`${name} exited with code ${code}`);
-    cleanup();
-    process.exit(code ?? 1);
-  };
+  const onExit =
+    (name: string) =>
+    (code: number | null): void => {
+      console.log(`${name} exited with code ${code}`);
+      cleanup();
+      process.exit(code ?? 1);
+    };
 
   serveProcess.once("exit", onExit("analyzer"));
   viewerProcess.once("exit", onExit("viewer"));
@@ -360,7 +362,7 @@ function logAnalyzeSummary(graph: Graph, outputFile: string, projectRoot: string
       `ui=${uiCount}`,
       `edges=${graph.edges.length}`,
       `file=${path.relative(projectRoot, outputFile)}`,
-    ].join(" ")
+    ].join(" "),
   );
 }
 
@@ -371,7 +373,7 @@ function logDiffSummary(
   },
   beforePath: string,
   afterPath: string,
-  outputFile: string
+  outputFile: string,
 ): void {
   const addedNodes = diff.nodes.filter((node) => node.status === "added").length;
   const removedNodes = diff.nodes.filter((node) => node.status === "removed").length;
@@ -390,7 +392,7 @@ function logDiffSummary(
       `removedNodes=${removedNodes}`,
       `addedEdges=${addedEdges}`,
       `removedEdges=${removedEdges}`,
-    ].join(" ")
+    ].join(" "),
   );
 }
 

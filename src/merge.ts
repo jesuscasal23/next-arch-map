@@ -2,10 +2,10 @@ import type { Edge, Graph, Node } from "./model.js";
 import { buildEdgeKey, mergeEdge, mergeNode } from "./utils.js";
 
 export function mergeGraphs(graphs: Graph[]): Graph {
-  return graphs.reduce<Graph>(
-    (accumulator, graph) => mergePartial(accumulator, graph),
-    { nodes: [], edges: [] }
-  );
+  return graphs.reduce<Graph>((accumulator, graph) => mergePartial(accumulator, graph), {
+    nodes: [],
+    edges: [],
+  });
 }
 
 export function mergePartial(base: Graph, additions: { nodes: Node[]; edges: Edge[] }): Graph {
@@ -37,7 +37,7 @@ export function mergePartial(base: Graph, additions: { nodes: Node[]; edges: Edg
       (left, right) =>
         left.kind.localeCompare(right.kind) ||
         left.from.localeCompare(right.from) ||
-        left.to.localeCompare(right.to)
+        left.to.localeCompare(right.to),
     ),
   };
 }

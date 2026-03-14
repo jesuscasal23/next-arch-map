@@ -1,10 +1,4 @@
-export type NodeType =
-  | "page"
-  | "endpoint"
-  | "db"
-  | "ui"
-  | "handler"
-  | "action";
+export type NodeType = "page" | "endpoint" | "db" | "ui" | "handler" | "action";
 
 export type Node = {
   id: string;

@@ -94,17 +94,14 @@ export function getEndpointRouteFromFile(scanRoot: string, filePath: string): st
     .filter((segment) => !ROUTE_GROUP_PATTERN.test(segment))
     .map(decodeRouteSegment);
   const prefixedSegments = [...getEndpointPrefixSegments(scanRoot), ...routeSegments].filter(
-    Boolean
+    Boolean,
   );
 
   if (!ROUTE_FILE_PATTERN.test(fileName)) {
     return prefixedSegments.length === 0 ? "/" : `/${prefixedSegments.join("/")}`;
   }
 
-  if (
-    prefixedSegments.length > 1 &&
-    prefixedSegments[0] === prefixedSegments[1]
-  ) {
+  if (prefixedSegments.length > 1 && prefixedSegments[0] === prefixedSegments[1]) {
     prefixedSegments.shift();
   }
 
@@ -155,7 +152,7 @@ export function getScriptKind(filePath: string): ts.ScriptKind {
 
 export function getSourceFile(
   filePath: string,
-  sourceFileCache?: Map<string, ts.SourceFile>
+  sourceFileCache?: Map<string, ts.SourceFile>,
 ): ts.SourceFile | null {
   const cachedSourceFile = sourceFileCache?.get(filePath);
   if (cachedSourceFile) {
@@ -168,7 +165,7 @@ export function getSourceFile(
       fs.readFileSync(filePath, "utf8"),
       ts.ScriptTarget.Latest,
       true,
-      getScriptKind(filePath)
+      getScriptKind(filePath),
     );
     sourceFileCache?.set(filePath, sourceFile);
     return sourceFile;
@@ -180,7 +177,7 @@ export function getSourceFile(
 export function resolveLocalModulePath(
   importerFilePath: string,
   specifier: string,
-  projectRoot: string
+  projectRoot: string,
 ): string | null {
   let basePath: string | null = null;
 
@@ -283,7 +280,7 @@ export function getStringLiteralValue(expression: ts.Expression): string | null 
 
 export function mergeMeta(
   baseMeta?: Record<string, any>,
-  nextMeta?: Record<string, any>
+  nextMeta?: Record<string, any>,
 ): Record<string, any> | undefined {
   if (!baseMeta) {
     return nextMeta;
@@ -358,7 +355,7 @@ export function buildActionNode(
   pageRoute: string,
   actionId: string,
   filePath: string,
-  extraMeta?: Record<string, unknown>
+  extraMeta?: Record<string, unknown>,
 ) {
   const label = actionId;
 

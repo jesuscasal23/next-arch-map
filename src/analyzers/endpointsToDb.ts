@@ -85,7 +85,7 @@ const DEFAULT_DB_CLIENT_IDENTIFIERS = ["prisma"];
 const ROUTE_METHOD_EXPORTS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
 
 export async function analyzeEndpointsToDb(
-  options: AnalyzeEndpointsToDbOptions
+  options: AnalyzeEndpointsToDbOptions,
 ): Promise<{ nodes: Node[]; edges: Edge[] }> {
   const projectRoot = resolveProjectRoot(options.projectRoot);
   const scanRoots = getExistingDirectories(projectRoot, options.apiDirs ?? DEFAULT_API_DIRS);
@@ -100,59 +100,70 @@ export async function analyzeEndpointsToDb(
 
   for (const scanRoot of scanRoots) {
     for (const filePath of walkDirectory(scanRoot)) {
-      if (seenRouteFiles.has(filePath) || isIgnoredSourceFile(filePath) || !isRouteHandlerFile(filePath)) {
+      if (
+        seenRouteFiles.has(filePath) ||
+        isIgnoredSourceFile(filePath) ||
+        !isRouteHandlerFile(filePath)
+      ) {
         continue;
       }
 
       seenRouteFiles.add(filePath);
-      const endpointPath = getEndpointRouteFromFile(scanRoot, filePath);
-      const { availableMethods, dbUsageByModel } = analyzeEndpoint(
-        filePath,
-        projectRoot,
-        moduleCache,
-        sourceFileCache,
-        dbClientIdentifiers
-      );
-
-      const endpointNode = ensureNode(nodes, nodeIds, buildEndpointNode(endpointPath, filePath));
-      const handlerMethods = availableMethods.size > 0 ? [...availableMethods] : [undefined];
-
-      for (const methodName of handlerMethods) {
-        const handlerNode = ensureNode(
-          nodes,
-          nodeIds,
-          buildHandlerNode(endpointPath, filePath, methodName)
+      try {
+        const endpointPath = getEndpointRouteFromFile(scanRoot, filePath);
+        const { availableMethods, dbUsageByModel } = analyzeEndpoint(
+          filePath,
+          projectRoot,
+          moduleCache,
+          sourceFileCache,
+          dbClientIdentifiers,
         );
-        const edgeKey = buildEdgeKey(endpointNode.id, handlerNode.id, "endpoint-handler");
 
-        if (edgeKeys.has(edgeKey)) {
-          continue;
+        const endpointNode = ensureNode(nodes, nodeIds, buildEndpointNode(endpointPath, filePath));
+        const handlerMethods = availableMethods.size > 0 ? [...availableMethods] : [undefined];
+
+        for (const methodName of handlerMethods) {
+          const handlerNode = ensureNode(
+            nodes,
+            nodeIds,
+            buildHandlerNode(endpointPath, filePath, methodName),
+          );
+          const edgeKey = buildEdgeKey(endpointNode.id, handlerNode.id, "endpoint-handler");
+
+          if (edgeKeys.has(edgeKey)) {
+            continue;
+          }
+
+          edgeKeys.add(edgeKey);
+          edges.push({
+            from: endpointNode.id,
+            to: handlerNode.id,
+            kind: "endpoint-handler",
+            meta: methodName ? { method: methodName } : undefined,
+          });
         }
 
-        edgeKeys.add(edgeKey);
-        edges.push({
-          from: endpointNode.id,
-          to: handlerNode.id,
-          kind: "endpoint-handler",
-          meta: methodName ? { method: methodName } : undefined,
-        });
-      }
+        for (const [modelName, dbUsage] of dbUsageByModel) {
+          const dbNode = ensureNode(nodes, nodeIds, buildDbNode(modelName, dbUsage.filePath));
+          const edgeKey = buildEdgeKey(endpointNode.id, dbNode.id, "endpoint-db");
 
-      for (const [modelName, dbUsage] of dbUsageByModel) {
-        const dbNode = ensureNode(nodes, nodeIds, buildDbNode(modelName, dbUsage.filePath));
-        const edgeKey = buildEdgeKey(endpointNode.id, dbNode.id, "endpoint-db");
+          if (edgeKeys.has(edgeKey)) {
+            continue;
+          }
 
-        if (edgeKeys.has(edgeKey)) {
-          continue;
+          edgeKeys.add(edgeKey);
+          edges.push({
+            from: endpointNode.id,
+            to: dbNode.id,
+            kind: "endpoint-db",
+            meta: dbUsage.actionName ? { action: dbUsage.actionName } : undefined,
+          });
         }
-
-        edgeKeys.add(edgeKey);
-        edges.push({
-          from: endpointNode.id,
-          to: dbNode.id,
-          kind: "endpoint-db",
-          meta: dbUsage.actionName ? { action: dbUsage.actionName } : undefined,
-        });
+      } catch (error) {
+        const relative = path.relative(projectRoot, filePath);
+        console.warn(
+          `Warning: skipping ${relative}: ${error instanceof Error ? error.message : error}`,
+        );
       }
     }
   }
@@ -163,7 +174,7 @@ export async function analyzeEndpointsToDb(
       (left, right) =>
         left.kind.localeCompare(right.kind) ||
         left.from.localeCompare(right.from) ||
-        left.to.localeCompare(right.to)
+        left.to.localeCompare(right.to),
     ),
   };
 }
@@ -173,7 +184,7 @@ function analyzeEndpoint(
   projectRoot: string,
   moduleCache: Map<string, ModuleInfo>,
   sourceFileCache: Map<string, ts.SourceFile>,
-  dbClientIdentifiers: Set<string>
+  dbClientIdentifiers: Set<string>,
 ): EndpointAnalysis {
   const state: AnalysisState = {
     projectRoot,
@@ -201,7 +212,7 @@ function analyzeEndpoint(
 function analyzeDeclaration(
   declaration: ResolvedDeclaration,
   state: AnalysisState,
-  activeDbClients: Set<string>
+  activeDbClients: Set<string>,
 ): void {
   if (state.visitedDeclarationKeys.has(declaration.key)) {
     return;
@@ -215,7 +226,7 @@ function visitNode(
   node: ts.Node,
   filePath: string,
   state: AnalysisState,
-  activeDbClients: Set<string>
+  activeDbClients: Set<string>,
 ): void {
   if (ts.isCallExpression(node)) {
     const dbUsage = parseDbUsage(node, activeDbClients);
@@ -240,7 +251,7 @@ function visitNode(
         getFunctionBodyNode(transactionCallback.callback),
         filePath,
         state,
-        new Set([...activeDbClients, transactionCallback.clientIdentifier])
+        new Set([...activeDbClients, transactionCallback.clientIdentifier]),
       );
     }
 
@@ -257,7 +268,7 @@ function visitNode(
 
 function parseDbUsage(
   node: ts.CallExpression,
-  activeDbClients: Set<string>
+  activeDbClients: Set<string>,
 ): { modelName: string; actionName?: string } | null {
   if (
     !ts.isPropertyAccessExpression(node.expression) ||
@@ -280,13 +291,11 @@ function parseDbUsage(
 
 function getTransactionCallback(
   node: ts.CallExpression,
-  activeDbClients: Set<string>
-):
-  | {
-      callback: ts.ArrowFunction | ts.FunctionExpression;
-      clientIdentifier: string;
-    }
-  | null {
+  activeDbClients: Set<string>,
+): {
+  callback: ts.ArrowFunction | ts.FunctionExpression;
+  clientIdentifier: string;
+} | null {
   if (
     !ts.isPropertyAccessExpression(node.expression) ||
     !ts.isIdentifier(node.expression.expression) ||
@@ -298,7 +307,7 @@ function getTransactionCallback(
 
   const callback = node.arguments.find(
     (argument): argument is ts.ArrowFunction | ts.FunctionExpression =>
-      ts.isArrowFunction(argument) || ts.isFunctionExpression(argument)
+      ts.isArrowFunction(argument) || ts.isFunctionExpression(argument),
   );
   const firstParameter = callback?.parameters[0];
 
@@ -313,12 +322,12 @@ function getTransactionCallback(
 }
 
 function shouldResolveCall(
-  node: ts.CallExpression
+  node: ts.CallExpression,
 ): node is ts.CallExpression & { expression: ts.Identifier } {
   return (
     ts.isIdentifier(node.expression) &&
-    !node.arguments.some((argument) =>
-      ts.isArrowFunction(argument) || ts.isFunctionExpression(argument)
+    !node.arguments.some(
+      (argument) => ts.isArrowFunction(argument) || ts.isFunctionExpression(argument),
     )
   );
 }
@@ -326,7 +335,7 @@ function shouldResolveCall(
 function resolveIdentifierReference(
   identifierName: string,
   filePath: string,
-  state: AnalysisState
+  state: AnalysisState,
 ): ResolvedDeclaration | null {
   const moduleInfo = getModuleInfo(filePath, state);
   const localDeclaration = moduleInfo.localDeclarations.get(identifierName);
@@ -351,7 +360,7 @@ function resolveExportReference(
   filePath: string,
   exportName: string,
   state: AnalysisState,
-  seen = new Set<string>()
+  seen = new Set<string>(),
 ): ResolvedDeclaration | null {
   const seenKey = `${filePath}::${exportName}`;
   if (seen.has(seenKey)) {
@@ -407,7 +416,16 @@ function getModuleInfo(filePath: string, state: AnalysisState): ModuleInfo {
 
   const sourceFile = getSourceFile(filePath, state.sourceFileCache);
   if (!sourceFile) {
-    throw new Error(`Could not parse ${path.relative(state.projectRoot, filePath)}.`);
+    const emptyModuleInfo: ModuleInfo = {
+      localDeclarations: new Map(),
+      importsByLocalName: new Map(),
+      exportsByName: new Map(),
+    };
+    console.warn(
+      `Warning: could not parse ${path.relative(state.projectRoot, filePath)}, skipping.`,
+    );
+    state.moduleCache.set(filePath, emptyModuleInfo);
+    return emptyModuleInfo;
   }
 
   const localDeclarations = new Map<string, ts.Node>();
@@ -460,7 +478,7 @@ function getModuleInfo(filePath: string, state: AnalysisState): ModuleInfo {
       const resolvedImportPath = resolveLocalModulePath(
         filePath,
         statement.moduleSpecifier.text,
-        state.projectRoot
+        state.projectRoot,
       );
       if (!resolvedImportPath || !statement.importClause) {
         continue;
@@ -563,11 +581,15 @@ function getFunctionBodyNode(node: ts.ArrowFunction | ts.FunctionExpression): ts
 }
 
 function hasExportModifier(node: ts.HasModifiers): boolean {
-  return ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ?? false;
+  return (
+    ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ??
+    false
+  );
 }
 
 function hasDefaultModifier(node: ts.HasModifiers): boolean {
-  return ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword) ?? false;
+  return (
+    ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword) ??
+    false
+  );
 }
-
-

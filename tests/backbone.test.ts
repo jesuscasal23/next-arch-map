@@ -35,7 +35,7 @@ export default function Dashboard() {
   };
   return <UserList onClick={handleClick} />;
 }
-`
+`,
   );
 
   writeFixtureFile(
@@ -48,7 +48,7 @@ export async function GET() {
   const users = await prisma.user.findMany();
   return Response.json(users);
 }
-`
+`,
   );
 
   writeFixtureFile(
@@ -59,7 +59,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   fetch("/api/health");
   return <html><body>{children}</body></html>;
 }
-`
+`,
   );
 
   writeFixtureFile(
@@ -69,7 +69,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 export function UserList({ onClick }: { onClick: () => void }) {
   return <div onClick={onClick}>Users</div>;
 }
-`
+`,
   );
 
   return tmpDir;
@@ -93,7 +93,7 @@ describe("pagesToEndpoints: page vs non-page files", () => {
   it("page.tsx produces page -> action -> endpoint flow", () => {
     const pageNode = graph.nodes.find((n) => n.id === "page:/dashboard");
     const actionNodes = graph.nodes.filter(
-      (n) => n.type === "action" && n.id.startsWith("action:/dashboard:")
+      (n) => n.type === "action" && n.id.startsWith("action:/dashboard:"),
     );
     const endpointNode = graph.nodes.find((n) => n.id === "endpoint:/api/users");
 
@@ -101,17 +101,14 @@ describe("pagesToEndpoints: page vs non-page files", () => {
     expect(actionNodes.length).toBeGreaterThan(0);
     expect(endpointNode).toBeDefined();
 
-    expect(graph.edges.some((e) => e.kind === "page-action" && e.from === pageNode!.id)).toBe(
-      true
+    expect(graph.edges.some((e) => e.kind === "page-action" && e.from === pageNode!.id)).toBe(true);
+    expect(graph.edges.some((e) => e.kind === "action-endpoint" && e.to === endpointNode!.id)).toBe(
+      true,
     );
     expect(
-      graph.edges.some((e) => e.kind === "action-endpoint" && e.to === endpointNode!.id)
-    ).toBe(true);
-    expect(
       graph.edges.some(
-        (e) =>
-          e.kind === "page-endpoint" && e.from === pageNode!.id && e.to === endpointNode!.id
-      )
+        (e) => e.kind === "page-endpoint" && e.from === pageNode!.id && e.to === endpointNode!.id,
+      ),
     ).toBe(true);
   });
 
@@ -119,13 +116,13 @@ describe("pagesToEndpoints: page vs non-page files", () => {
     // No page node derived from the API route handler
     expect(graph.nodes.find((n) => n.id === "page:/api/users")).toBeUndefined();
     expect(
-      graph.nodes.filter((n) => n.type === "action" && n.id.startsWith("action:/api/users:"))
+      graph.nodes.filter((n) => n.type === "action" && n.id.startsWith("action:/api/users:")),
     ).toHaveLength(0);
 
     // layout.tsx is at app root — its route would be "/" but it is not a page file
     expect(graph.nodes.find((n) => n.id === "page:/")).toBeUndefined();
     expect(
-      graph.nodes.filter((n) => n.type === "action" && n.id.startsWith("action:/:"))
+      graph.nodes.filter((n) => n.type === "action" && n.id.startsWith("action:/:")),
     ).toHaveLength(0);
   });
 
@@ -147,7 +144,11 @@ describe("mergePartial: metadata precedence on shared nodes", () => {
           id: "endpoint:/api/users",
           type: "endpoint",
           label: "/api/users",
-          meta: { filePath: "app/dashboard/page.tsx", route: "/api/users", callerInfo: "dashboard" },
+          meta: {
+            filePath: "app/dashboard/page.tsx",
+            route: "/api/users",
+            callerInfo: "dashboard",
+          },
         },
         {
           id: "page:/dashboard",
@@ -296,7 +297,7 @@ describe("analyzeProject: full pipeline on fixture", () => {
   it("produces all expected node types", () => {
     expect(graph.nodes.find((n) => n.id === "page:/dashboard")).toBeDefined();
     expect(
-      graph.nodes.some((n) => n.type === "action" && n.id.startsWith("action:/dashboard:"))
+      graph.nodes.some((n) => n.type === "action" && n.id.startsWith("action:/dashboard:")),
     ).toBe(true);
     expect(graph.nodes.find((n) => n.id === "endpoint:/api/users")).toBeDefined();
     expect(graph.nodes.find((n) => n.id === "handler:/api/users:GET")).toBeDefined();
@@ -311,27 +312,25 @@ describe("analyzeProject: full pipeline on fixture", () => {
     // page -> endpoint (direct)
     expect(
       graph.edges.some(
-        (e) => e.kind === "page-endpoint" && e.from === pageId && e.to === endpointId
-      )
+        (e) => e.kind === "page-endpoint" && e.from === pageId && e.to === endpointId,
+      ),
     ).toBe(true);
 
     // endpoint -> handler
-    expect(
-      graph.edges.some((e) => e.kind === "endpoint-handler" && e.from === endpointId)
-    ).toBe(true);
+    expect(graph.edges.some((e) => e.kind === "endpoint-handler" && e.from === endpointId)).toBe(
+      true,
+    );
 
     // endpoint -> db
     expect(
       graph.edges.some(
-        (e) => e.kind === "endpoint-db" && e.from === endpointId && e.to === "db:user"
-      )
+        (e) => e.kind === "endpoint-db" && e.from === endpointId && e.to === "db:user",
+      ),
     ).toBe(true);
 
     // page -> ui
     expect(
-      graph.edges.some(
-        (e) => e.kind === "page-ui" && e.from === pageId && e.to === "ui:UserList"
-      )
+      graph.edges.some((e) => e.kind === "page-ui" && e.from === pageId && e.to === "ui:UserList"),
     ).toBe(true);
   });
 });

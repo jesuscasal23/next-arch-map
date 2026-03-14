@@ -46,8 +46,4 @@ export { analyzePagesToEndpoints } from "./analyzers/pagesToEndpoints.js";
 export { analyzeEndpointsToDb } from "./analyzers/endpointsToDb.js";
 export { analyzePagesToUi } from "./analyzers/pagesToUi.js";
 export { mergeGraphs, mergePartial } from "./merge.js";
-export {
-  getDbModelsForPage,
-  getEndpointsForPage,
-  getPagesForDbModel,
-} from "./query.js";
+export { getDbModelsForPage, getEndpointsForPage, getPagesForDbModel } from "./query.js";

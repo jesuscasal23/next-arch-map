@@ -19,7 +19,9 @@ export type GraphDiff = {
 };
 
 function nodeEqual(a: Node, b: Node): boolean {
-  return a.type === b.type && a.label === b.label && JSON.stringify(a.meta) === JSON.stringify(b.meta);
+  return (
+    a.type === b.type && a.label === b.label && JSON.stringify(a.meta) === JSON.stringify(b.meta)
+  );
 }
 
 function edgeEqual(a: Edge, b: Edge): boolean {

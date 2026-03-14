@@ -35,7 +35,7 @@ const DEFAULT_UI_IMPORT_PATH_GLOBS = [
 ];
 
 export async function analyzePagesToUi(
-  options: AnalyzePagesToUiOptions
+  options: AnalyzePagesToUiOptions,
 ): Promise<{ nodes: Node[]; edges: Edge[] }> {
   const projectRoot = resolveProjectRoot(options.projectRoot);
   const appDirs = getExistingDirectories(projectRoot, options.appDirs ?? DEFAULT_APP_DIRS);
@@ -44,7 +44,9 @@ export async function analyzePagesToUi(
     throw new Error("Could not find an app/ or src/app/ directory.");
   }
 
-  const uiPathMatchers = (options.uiImportPathGlobs ?? DEFAULT_UI_IMPORT_PATH_GLOBS).map(globToRegExp);
+  const uiPathMatchers = (options.uiImportPathGlobs ?? DEFAULT_UI_IMPORT_PATH_GLOBS).map(
+    globToRegExp,
+  );
   const nodes: Node[] = [];
   const edges: Edge[] = [];
   const nodeIds = new Set<string>();
@@ -56,28 +58,35 @@ export async function analyzePagesToUi(
         continue;
       }
 
-      const route = getPageRouteFromFile(appDir, filePath);
-      const pageNode = ensureNode(nodes, nodeIds, buildPageNode(route, filePath));
-      const components = collectUiComponentUsages(filePath, projectRoot, uiPathMatchers);
+      try {
+        const route = getPageRouteFromFile(appDir, filePath);
+        const pageNode = ensureNode(nodes, nodeIds, buildPageNode(route, filePath));
+        const components = collectUiComponentUsages(filePath, projectRoot, uiPathMatchers);
 
-      for (const component of components) {
-        const uiNode = ensureNode(
-          nodes,
-          nodeIds,
-          buildUiNode(component.componentName, component.filePath)
-        );
-        const edgeKey = buildEdgeKey(pageNode.id, uiNode.id, "page-ui");
+        for (const component of components) {
+          const uiNode = ensureNode(
+            nodes,
+            nodeIds,
+            buildUiNode(component.componentName, component.filePath),
+          );
+          const edgeKey = buildEdgeKey(pageNode.id, uiNode.id, "page-ui");
 
-        if (edgeKeys.has(edgeKey)) {
-          continue;
+          if (edgeKeys.has(edgeKey)) {
+            continue;
+          }
+
+          edgeKeys.add(edgeKey);
+          edges.push({
+            from: pageNode.id,
+            to: uiNode.id,
+            kind: "page-ui",
+          });
         }
-
-        edgeKeys.add(edgeKey);
-        edges.push({
-          from: pageNode.id,
-          to: uiNode.id,
-          kind: "page-ui",
-        });
+      } catch (error) {
+        const relative = path.relative(projectRoot, filePath);
+        console.warn(
+          `Warning: skipping ${relative}: ${error instanceof Error ? error.message : error}`,
+        );
       }
     }
   }
@@ -88,7 +97,7 @@ export async function analyzePagesToUi(
       (left, right) =>
         left.kind.localeCompare(right.kind) ||
         left.from.localeCompare(right.from) ||
-        left.to.localeCompare(right.to)
+        left.to.localeCompare(right.to),
     ),
   };
 }
@@ -96,7 +105,7 @@ export async function analyzePagesToUi(
 function collectUiComponentUsages(
   pageFilePath: string,
   projectRoot: string,
-  uiPathMatchers: RegExp[]
+  uiPathMatchers: RegExp[],
 ): UiComponentUsage[] {
   const sourceFile = getSourceFile(pageFilePath);
   if (!sourceFile) {
@@ -145,7 +154,7 @@ function isUiLikeImport(
   importSource: string,
   resolvedImportPath: string | null,
   projectRoot: string,
-  uiPathMatchers: RegExp[]
+  uiPathMatchers: RegExp[],
 ): boolean {
   if (/^\.\.?\/components(\/|$)/.test(importSource) || importSource.startsWith("@/components/")) {
     return true;

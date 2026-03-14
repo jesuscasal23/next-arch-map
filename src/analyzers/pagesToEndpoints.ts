@@ -43,7 +43,7 @@ const DEFAULT_HTTP_CLIENT_IDENTIFIERS = ["fetch", "axios", "apiClient"];
 const DEFAULT_HTTP_CLIENT_METHODS = ["get", "post", "put", "patch", "delete", "head", "options"];
 
 export async function analyzePagesToEndpoints(
-  options: AnalyzePagesToEndpointsOptions
+  options: AnalyzePagesToEndpointsOptions,
 ): Promise<Graph> {
   const projectRoot = resolveProjectRoot(options.projectRoot);
   const appDirs = getExistingDirectories(projectRoot, options.appDirs ?? DEFAULT_APP_DIRS);
@@ -54,15 +54,13 @@ export async function analyzePagesToEndpoints(
 
   const extraScanDirs = getExistingDirectories(
     projectRoot,
-    options.extraScanDirs ?? DEFAULT_EXTRA_SCAN_DIRS
+    options.extraScanDirs ?? DEFAULT_EXTRA_SCAN_DIRS,
   );
   const httpClientIdentifiers = new Set(
-    (options.httpClientIdentifiers ?? DEFAULT_HTTP_CLIENT_IDENTIFIERS).map((value) =>
-      value.trim()
-    )
+    (options.httpClientIdentifiers ?? DEFAULT_HTTP_CLIENT_IDENTIFIERS).map((value) => value.trim()),
   );
   const httpClientMethods = new Set(
-    (options.httpClientMethods ?? DEFAULT_HTTP_CLIENT_METHODS).map((value) => value.toLowerCase())
+    (options.httpClientMethods ?? DEFAULT_HTTP_CLIENT_METHODS).map((value) => value.toLowerCase()),
   );
   const nodes: Node[] = [];
   const edges: Edge[] = [];
@@ -78,84 +76,83 @@ export async function analyzePagesToEndpoints(
         continue;
       }
 
-      const sourceFile = getSourceFile(filePath, sourceFileCache);
-      if (!sourceFile) {
-        continue;
-      }
-
-      const httpCalls = collectHttpCalls(sourceFile, httpClientIdentifiers, httpClientMethods);
-
-      // Non-page files (route handlers, layouts, helpers) under app/ only
-      // contribute endpoint nodes without creating fake page flows.
-      if (!isPageFile(filePath)) {
-        for (const call of httpCalls) {
-          ensureNode(nodes, nodeIds, buildEndpointNode(call.endpoint, filePath));
-        }
-        continue;
-      }
-
-      const route = getPageRouteFromFile(appDir, filePath);
-      ensureNode(nodes, nodeIds, buildPageNode(route, filePath));
-
-      for (const call of httpCalls) {
-        const nextCallIndex = (callIndexByRoute.get(route) ?? 0) + 1;
-        callIndexByRoute.set(route, nextCallIndex);
-        const actionContext = inferActionContext(call.node, sourceFile, nextCallIndex);
-        const actionId = allocateActionId(
-          route,
-          actionContext.id,
-          actionIdCountByRoute
-        );
-        const pageNode = ensureNode(nodes, nodeIds, buildPageNode(route, filePath));
-        const actionNode = ensureNode(
-          nodes,
-          nodeIds,
-          buildActionNode(route, actionId, filePath, actionContext.meta)
-        );
-        const endpointNode = ensureNode(
-          nodes,
-          nodeIds,
-          buildEndpointNode(call.endpoint, filePath)
-        );
-
-        const pageActionKey = buildEdgeKey(pageNode.id, actionNode.id, "page-action");
-        if (!edgeKeys.has(pageActionKey)) {
-          edgeKeys.add(pageActionKey);
-          edges.push({
-            from: pageNode.id,
-            to: actionNode.id,
-            kind: "page-action",
-          });
-        }
-
-        const actionEndpointKey = buildEdgeKey(
-          actionNode.id,
-          endpointNode.id,
-          "action-endpoint"
-        );
-        if (!edgeKeys.has(actionEndpointKey)) {
-          edgeKeys.add(actionEndpointKey);
-          edges.push({
-            from: actionNode.id,
-            to: endpointNode.id,
-            kind: "action-endpoint",
-            meta: call.method ? { method: call.method } : undefined,
-          });
-        }
-
-        const edgeKey = buildEdgeKey(pageNode.id, endpointNode.id, "page-endpoint");
-
-        if (edgeKeys.has(edgeKey)) {
+      try {
+        const sourceFile = getSourceFile(filePath, sourceFileCache);
+        if (!sourceFile) {
           continue;
         }
 
-        edgeKeys.add(edgeKey);
-        edges.push({
-          from: pageNode.id,
-          to: endpointNode.id,
-          kind: "page-endpoint",
-          meta: call.method ? { method: call.method } : undefined,
-        });
+        const httpCalls = collectHttpCalls(sourceFile, httpClientIdentifiers, httpClientMethods);
+
+        // Non-page files (route handlers, layouts, helpers) under app/ only
+        // contribute endpoint nodes without creating fake page flows.
+        if (!isPageFile(filePath)) {
+          for (const call of httpCalls) {
+            ensureNode(nodes, nodeIds, buildEndpointNode(call.endpoint, filePath));
+          }
+          continue;
+        }
+
+        const route = getPageRouteFromFile(appDir, filePath);
+        ensureNode(nodes, nodeIds, buildPageNode(route, filePath));
+
+        for (const call of httpCalls) {
+          const nextCallIndex = (callIndexByRoute.get(route) ?? 0) + 1;
+          callIndexByRoute.set(route, nextCallIndex);
+          const actionContext = inferActionContext(call.node, sourceFile, nextCallIndex);
+          const actionId = allocateActionId(route, actionContext.id, actionIdCountByRoute);
+          const pageNode = ensureNode(nodes, nodeIds, buildPageNode(route, filePath));
+          const actionNode = ensureNode(
+            nodes,
+            nodeIds,
+            buildActionNode(route, actionId, filePath, actionContext.meta),
+          );
+          const endpointNode = ensureNode(
+            nodes,
+            nodeIds,
+            buildEndpointNode(call.endpoint, filePath),
+          );
+
+          const pageActionKey = buildEdgeKey(pageNode.id, actionNode.id, "page-action");
+          if (!edgeKeys.has(pageActionKey)) {
+            edgeKeys.add(pageActionKey);
+            edges.push({
+              from: pageNode.id,
+              to: actionNode.id,
+              kind: "page-action",
+            });
+          }
+
+          const actionEndpointKey = buildEdgeKey(actionNode.id, endpointNode.id, "action-endpoint");
+          if (!edgeKeys.has(actionEndpointKey)) {
+            edgeKeys.add(actionEndpointKey);
+            edges.push({
+              from: actionNode.id,
+              to: endpointNode.id,
+              kind: "action-endpoint",
+              meta: call.method ? { method: call.method } : undefined,
+            });
+          }
+
+          const edgeKey = buildEdgeKey(pageNode.id, endpointNode.id, "page-endpoint");
+
+          if (edgeKeys.has(edgeKey)) {
+            continue;
+          }
+
+          edgeKeys.add(edgeKey);
+          edges.push({
+            from: pageNode.id,
+            to: endpointNode.id,
+            kind: "page-endpoint",
+            meta: call.method ? { method: call.method } : undefined,
+          });
+        }
+      } catch (error) {
+        const relative = path.relative(projectRoot, filePath);
+        console.warn(
+          `Warning: skipping ${relative}: ${error instanceof Error ? error.message : error}`,
+        );
       }
     }
   }
@@ -166,13 +163,20 @@ export async function analyzePagesToEndpoints(
         continue;
       }
 
-      const sourceFile = getSourceFile(filePath, sourceFileCache);
-      if (!sourceFile) {
-        continue;
-      }
+      try {
+        const sourceFile = getSourceFile(filePath, sourceFileCache);
+        if (!sourceFile) {
+          continue;
+        }
 
-      for (const call of collectHttpCalls(sourceFile, httpClientIdentifiers, httpClientMethods)) {
-        ensureNode(nodes, nodeIds, buildEndpointNode(call.endpoint, filePath));
+        for (const call of collectHttpCalls(sourceFile, httpClientIdentifiers, httpClientMethods)) {
+          ensureNode(nodes, nodeIds, buildEndpointNode(call.endpoint, filePath));
+        }
+      } catch (error) {
+        const relative = path.relative(projectRoot, filePath);
+        console.warn(
+          `Warning: skipping ${relative}: ${error instanceof Error ? error.message : error}`,
+        );
       }
     }
   }
@@ -183,7 +187,7 @@ export async function analyzePagesToEndpoints(
       (left, right) =>
         left.kind.localeCompare(right.kind) ||
         left.from.localeCompare(right.from) ||
-        left.to.localeCompare(right.to)
+        left.to.localeCompare(right.to),
     ),
   };
 }
@@ -191,7 +195,7 @@ export async function analyzePagesToEndpoints(
 function collectHttpCalls(
   sourceFile: ts.SourceFile,
   httpClientIdentifiers: Set<string>,
-  httpClientMethods: Set<string>
+  httpClientMethods: Set<string>,
 ): HttpCall[] {
   const calls: HttpCall[] = [];
   const constMap = collectStringConstants(sourceFile);
@@ -219,7 +223,7 @@ function parseHttpCall(
   node: ts.CallExpression,
   constMap: Map<string, string>,
   httpClientIdentifiers: Set<string>,
-  httpClientMethods: Set<string>
+  httpClientMethods: Set<string>,
 ): Omit<HttpCall, "node"> | null {
   const endpoint = getEndpointArgument(node.arguments[0], constMap);
   if (!endpoint) {
@@ -250,7 +254,7 @@ function parseHttpCall(
 
 function getEndpointArgument(
   expression: ts.Expression | undefined,
-  constMap: Map<string, string>
+  constMap: Map<string, string>,
 ): string | null {
   if (!expression) {
     return null;
@@ -266,7 +270,7 @@ function getEndpointArgument(
 function inferActionContext(
   call: ts.CallExpression,
   sourceFile: ts.SourceFile,
-  callIndex: number
+  callIndex: number,
 ): ActionContext {
   const fallbackId = `call-${callIndex}`;
   const meta: Record<string, unknown> = {};
@@ -345,7 +349,7 @@ function inferActionContext(
 function allocateActionId(
   route: string,
   baseActionId: string,
-  countsByRoute: Map<string, Map<string, number>>
+  countsByRoute: Map<string, Map<string, number>>,
 ): string {
   const normalizedActionId = normalizeActionId(baseActionId);
   const routeCounts = countsByRoute.get(route) ?? new Map<string, number>();
@@ -402,7 +406,7 @@ function isFunctionLikeNode(node: ts.Node): node is ts.FunctionLikeDeclaration {
 
 function isTopLevelNamedFunctionLike(
   node: ts.Node,
-  sourceFile: ts.SourceFile
+  sourceFile: ts.SourceFile,
 ): node is ts.FunctionLikeDeclaration {
   if (!isFunctionLikeNode(node)) {
     return false;
@@ -425,14 +429,19 @@ function isTopLevelNamedFunctionLike(
 
 function getFunctionLikeName(node: ts.FunctionLikeDeclaration): string | undefined {
   if (
-    (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isMethodDeclaration(node)) &&
+    (ts.isFunctionDeclaration(node) ||
+      ts.isFunctionExpression(node) ||
+      ts.isMethodDeclaration(node)) &&
     node.name &&
     ts.isIdentifier(node.name)
   ) {
     return node.name.text;
   }
 
-  if ((ts.isArrowFunction(node) || ts.isFunctionExpression(node)) && ts.isVariableDeclaration(node.parent)) {
+  if (
+    (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
+    ts.isVariableDeclaration(node.parent)
+  ) {
     return ts.isIdentifier(node.parent.name) ? node.parent.name.text : undefined;
   }
 
@@ -441,7 +450,7 @@ function getFunctionLikeName(node: ts.FunctionLikeDeclaration): string | undefin
 
 function findJsxBindingForHandler(
   sourceFile: ts.SourceFile,
-  handlerName: string
+  handlerName: string,
 ): { eventName?: string; elementName?: string } | undefined {
   let match: { eventName?: string; elementName?: string } | undefined;
 

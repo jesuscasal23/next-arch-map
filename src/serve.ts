@@ -4,11 +4,7 @@ import chokidar from "chokidar";
 import { analyzeProject } from "./index.js";
 import { diffGraphs } from "./diff.js";
 import type { Graph } from "./model.js";
-import {
-  getDbModelsForPage,
-  getEndpointsForPage,
-  getPagesForDbModel,
-} from "./query.js";
+import { getDbModelsForPage, getEndpointsForPage, getPagesForDbModel } from "./query.js";
 
 export type ServeOptions = {
   projectRoot: string;
@@ -59,7 +55,7 @@ export async function serve(options: ServeOptions): Promise<void> {
           `ui=${uiCount}`,
           `nodes=${currentGraph.nodes.length}`,
           `edges=${currentGraph.edges.length}`,
-        ].join(" ")
+        ].join(" "),
       );
     } catch (error) {
       console.error("Analysis error:", error);

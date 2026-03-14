@@ -25,6 +25,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
     "dev": "node dist/cli.js dev"
   },
   "keywords": [
@@ -40,10 +41,11 @@
   },
   "license": "MIT",
   "dependencies": {
-    "chokidar": "^3.6.0"
+    "chokidar": "^3.6.0",
+    "typescript": "^5.8.2"
   },
   "devDependencies": {
     "@types/node": "^20.19.0",
-    "typescript": "^5.8.2"
+    "vitest": "^4.1.0"
   }
 }

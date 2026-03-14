@@ -1,14 +1,17 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Background,
   Controls,
+  Handle,
   MarkerType,
   MiniMap,
   Position,
   ReactFlow,
+  useReactFlow,
   type Edge as FlowEdge,
   type Node as FlowNode,
   type NodeMouseHandler,
+  type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { DiffStatus, EdgeKind, Graph, NodeType } from "./types";
@@ -77,7 +80,6 @@ function optimizeNodeOrder(
   visibleNodeIds: Set<string>,
   visibleEdgeKinds: Set<EdgeKind>,
 ): Map<NodeType, Graph["nodes"]> {
-  // Build adjacency map: nodeId -> list of connected nodeIds
   const adjacency = new Map<string, string[]>();
   for (const nodeId of visibleNodeIds) {
     adjacency.set(nodeId, []);
@@ -93,21 +95,17 @@ function optimizeNodeOrder(
     adjacency.get(edge.to)?.push(edge.from);
   }
 
-  // Track each node's row index within its column
   const nodeRowIndex = new Map<string, number>();
   for (const type of activeTypeOrder) {
     const nodes = nodesByType.get(type) ?? [];
     nodes.forEach((node, i) => nodeRowIndex.set(node.id, i));
   }
 
-  // Iterative barycenter: forward pass then reverse pass, repeated
   const ITERATIONS = 3;
   for (let iter = 0; iter < ITERATIONS; iter++) {
-    // Forward pass (left to right)
     for (let col = 1; col < activeTypeOrder.length; col++) {
       reorderColumn(activeTypeOrder[col], nodesByType, adjacency, nodeRowIndex);
     }
-    // Reverse pass (right to left)
     for (let col = activeTypeOrder.length - 2; col >= 0; col--) {
       reorderColumn(activeTypeOrder[col], nodesByType, adjacency, nodeRowIndex);
     }
@@ -125,7 +123,6 @@ function reorderColumn(
   const nodes = nodesByType.get(type);
   if (!nodes || nodes.length <= 1) return;
 
-  // Compute barycenter for each node (average row of connected nodes)
   const barycenters = new Map<string, number>();
   for (const node of nodes) {
     const neighbors = adjacency.get(node.id) ?? [];
@@ -136,16 +133,40 @@ function reorderColumn(
       const avg = neighborRows.reduce((s, r) => s + r, 0) / neighborRows.length;
       barycenters.set(node.id, avg);
     } else {
-      // No connections: keep current position as a tiebreaker
       barycenters.set(node.id, nodeRowIndex.get(node.id) ?? 0);
     }
   }
 
   nodes.sort((a, b) => (barycenters.get(a.id) ?? 0) - (barycenters.get(b.id) ?? 0));
-
-  // Update row indices after reorder
   nodes.forEach((node, i) => nodeRowIndex.set(node.id, i));
 }
+
+function PageNode({ data }: NodeProps) {
+  const screenshot = (data as Record<string, unknown>).screenshot as string | undefined;
+  return (
+    <div>
+      <Handle type="target" position={Position.Left} style={{ visibility: "hidden" }} />
+      <div style={{ fontSize: 12, fontWeight: 600 }}>
+        {String((data as Record<string, unknown>).label ?? "")}
+      </div>
+      {screenshot && (
+        <img
+          src={screenshot}
+          alt=""
+          style={{
+            marginTop: 6,
+            width: "100%",
+            borderRadius: 4,
+            border: "1px solid rgba(255,255,255,0.3)",
+          }}
+        />
+      )}
+      <Handle type="source" position={Position.Right} style={{ visibility: "hidden" }} />
+    </div>
+  );
+}
+
+const nodeTypes = { pageNode: PageNode };
 
 export function GraphView(props: GraphViewProps) {
   const {
@@ -159,31 +180,28 @@ export function GraphView(props: GraphViewProps) {
   } = props;
 
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleNodeClick: NodeMouseHandler = (_event, node) => onSelectNode(node.id);
+
   const handleNodeMouseEnter: NodeMouseHandler = useCallback((_event, node) => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
     setHoveredNodeId(node.id);
   }, []);
+
   const handleNodeMouseLeave: NodeMouseHandler = useCallback(() => {
-    setHoveredNodeId(null);
+    // Debounce leave to prevent flicker from re-renders
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoveredNodeId(null);
+      hoverTimeoutRef.current = null;
+    }, 50);
   }, []);
 
-  // Build set of edge-connected node IDs for the active (hovered or selected) node
-  const activeNodeId = hoveredNodeId ?? selectedNodeId;
-  const connectedEdgeIds = useMemo(() => {
-    if (!activeNodeId) return null;
-    const ids = new Set<string>();
-    ids.add(activeNodeId);
-    for (const edge of graph.edges) {
-      if (edge.from === activeNodeId || edge.to === activeNodeId) {
-        ids.add(edge.from);
-        ids.add(edge.to);
-      }
-    }
-    return ids;
-  }, [activeNodeId, graph.edges]);
-
-  const { flowNodes, flowEdges } = useMemo(() => {
+  // Compute layout without hover state — this is the expensive part
+  const { flowNodes: baseFlowNodes, flowEdges: baseFlowEdges } = useMemo(() => {
     const typeOrder: NodeType[] = ["page", "action", "endpoint", "handler", "db"];
     const visibleNodes = graph.nodes.filter((node) => visibleNodeTypes.has(node.type));
     const visibleNodeIds = new Set(visibleNodes.map((node) => node.id));
@@ -195,31 +213,36 @@ export function GraphView(props: GraphViewProps) {
       nodesByType.get(node.type)?.push(node);
     }
 
-    // Initial alphabetical sort as seed for the barycenter algorithm
     for (const nodes of nodesByType.values()) {
       nodes.sort((left, right) => left.label.localeCompare(right.label));
     }
 
     const activeTypeOrder = typeOrder.filter((type) => (nodesByType.get(type)?.length ?? 0) > 0);
-
-    // Optimize node ordering to minimize edge crossings
     optimizeNodeOrder(nodesByType, activeTypeOrder, graph.edges, visibleNodeIds, visibleEdgeKinds);
 
     const flowNodes: FlowNode[] = [];
     const columnWidth = 300;
-    const rowHeight = 80;
+    const defaultRowHeight = 80;
+    const hasScreenshots = graph.nodes.some(
+      (n) => n.type === "page" && n.meta?.screenshot,
+    );
+    const pageRowHeight = hasScreenshots ? 140 : defaultRowHeight;
 
     activeTypeOrder.forEach((type, columnIndex) => {
       const nodes = nodesByType.get(type) ?? [];
+      const rowHeight = type === "page" ? pageRowHeight : defaultRowHeight;
       nodes.forEach((node, rowIndex) => {
         const isSelected = node.id === selectedNodeId;
         const status = nodeStatusById?.get(node.id) ?? "unchanged";
         const borderColor = isSelected ? "#1e293b" : DIFF_BORDER_COLOR[status];
         const borderStyle = status === "removed" ? "dashed" : "solid";
+        const isPage = node.type === "page";
+        const screenshot = isPage ? (node.meta?.screenshot as string | undefined) : undefined;
 
         flowNodes.push({
           id: node.id,
-          data: { label: node.label },
+          ...(isPage ? { type: "pageNode" } : {}),
+          data: { label: node.label, ...(screenshot ? { screenshot } : {}) },
           position: {
             x: 80 + columnIndex * columnWidth,
             y: 80 + rowIndex * rowHeight,
@@ -246,7 +269,7 @@ export function GraphView(props: GraphViewProps) {
                 : status === "removed"
                   ? `0 0 0 3px rgba(239, 68, 68, 0.15)`
                   : `0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04)`,
-            transition: "box-shadow 0.15s ease, border-color 0.15s ease",
+            transition: "opacity 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
           },
         });
       });
@@ -263,12 +286,6 @@ export function GraphView(props: GraphViewProps) {
         const status = edgeStatusByKey?.get(buildEdgeKey(edge.from, edge.to, edge.kind)) ?? "unchanged";
         const strokeColor = status === "unchanged" ? EDGE_COLOR[edge.kind] : DIFF_EDGE_COLOR[status];
 
-        // Determine if this edge is highlighted (connected to active node)
-        const isHighlighted =
-          activeNodeId !== null &&
-          (edge.from === activeNodeId || edge.to === activeNodeId);
-        const isDimmed = activeNodeId !== null && !isHighlighted;
-
         return {
           id: `${edge.from}=>${edge.to}::${edge.kind}::${index}`,
           source: edge.from,
@@ -276,12 +293,11 @@ export function GraphView(props: GraphViewProps) {
           animated: false,
           style: {
             stroke: strokeColor,
-            strokeWidth: isHighlighted ? 2.5 : 1.5,
+            strokeWidth: 1.5,
             strokeDasharray: status === "removed" ? "6 4" : undefined,
-            opacity: isDimmed ? 0.08 : status === "removed" ? 0.6 : 0.85,
+            opacity: status === "removed" ? 0.6 : 0.85,
             transition: "opacity 0.15s ease, stroke-width 0.15s ease",
           },
-          zIndex: isHighlighted ? 10 : 0,
           markerEnd: {
             type: MarkerType.ArrowClosed,
             color: strokeColor,
@@ -291,7 +307,6 @@ export function GraphView(props: GraphViewProps) {
 
     return { flowNodes, flowEdges };
   }, [
-    activeNodeId,
     edgeStatusByKey,
     graph,
     nodeStatusById,
@@ -300,11 +315,60 @@ export function GraphView(props: GraphViewProps) {
     visibleNodeTypes,
   ]);
 
+  // Apply hover highlighting as a cheap pass over precomputed nodes/edges
+  const activeNodeId = hoveredNodeId ?? selectedNodeId;
+
+  const connectedNodeIds = useMemo(() => {
+    if (!activeNodeId) return null;
+    const ids = new Set<string>();
+    ids.add(activeNodeId);
+    for (const edge of graph.edges) {
+      if (edge.from === activeNodeId || edge.to === activeNodeId) {
+        ids.add(edge.from);
+        ids.add(edge.to);
+      }
+    }
+    return ids;
+  }, [activeNodeId, graph.edges]);
+
+  const flowNodes = useMemo(() => {
+    if (!connectedNodeIds) return baseFlowNodes;
+    return baseFlowNodes.map((node) => {
+      const isDimmed = !connectedNodeIds.has(node.id);
+      if (!isDimmed) return node;
+      return {
+        ...node,
+        style: {
+          ...node.style,
+          opacity: 0.25,
+        },
+      };
+    });
+  }, [baseFlowNodes, connectedNodeIds]);
+
+  const flowEdges = useMemo(() => {
+    if (!activeNodeId) return baseFlowEdges;
+    return baseFlowEdges.map((edge) => {
+      const isHighlighted = edge.source === activeNodeId || edge.target === activeNodeId;
+      const isDimmed = !isHighlighted;
+      return {
+        ...edge,
+        style: {
+          ...edge.style,
+          strokeWidth: isHighlighted ? 2.5 : 1.5,
+          opacity: isDimmed ? 0.08 : (edge.style?.opacity ?? 0.85),
+        },
+        zIndex: isHighlighted ? 10 : 0,
+      };
+    });
+  }, [baseFlowEdges, activeNodeId]);
+
   return (
     <div className="w-full h-full">
       <ReactFlow
         nodes={flowNodes}
         edges={flowEdges}
+        nodeTypes={nodeTypes}
         fitView
         fitViewOptions={{ padding: 0.18 }}
         onNodeClick={handleNodeClick}

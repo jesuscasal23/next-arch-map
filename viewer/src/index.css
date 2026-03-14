@@ -1,11 +1,12 @@
-:root {
-  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-  color: #0f172a;
-  background: #f8fafc;
-}
+@import "tailwindcss";
 
-* {
-  box-sizing: border-box;
+@theme {
+  --font-sans: "Inter", "SF Pro Display", -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+
+  --color-slate-850: #172033;
+  --color-sidebar: rgba(255, 255, 255, 0.92);
+  --color-sidebar-border: rgba(148, 163, 184, 0.2);
 }
 
 html,
@@ -16,17 +17,20 @@ body,
   height: 100%;
 }
 
-body {
-  min-width: 320px;
+/* Radix checkbox */
+[data-state="checked"] > .checkbox-indicator {
+  opacity: 1;
 }
 
-button,
-input,
-textarea,
-select {
-  font: inherit;
+/* Radix switch */
+button[role="switch"] {
+  all: unset;
 }
 
-pre {
-  margin: 0;
+button[role="switch"][data-state="checked"] {
+  background-color: var(--color-indigo-600);
+}
+
+button[role="switch"][data-state="checked"] > span {
+  transform: translateX(16px);
 }

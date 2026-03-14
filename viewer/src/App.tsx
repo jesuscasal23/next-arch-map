@@ -1,4 +1,5 @@
 import { useEffect, useState, type ChangeEvent } from "react";
+import * as Switch from "@radix-ui/react-switch";
 import { Filters } from "./Filters";
 import { GraphView } from "./GraphView";
 import { NodeDetails } from "./NodeDetails";
@@ -113,6 +114,7 @@ export function App() {
   );
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [activePreset, setActivePreset] = useState<LayerPreset | null>(null);
 
   useEffect(() => {
     setGraph(null);
@@ -139,7 +141,7 @@ export function App() {
             setGraph(null);
             setGraphDiff(null);
             setSelectedNodeId(null);
-            setLoadError(`Server graph request failed: ${graphResponse.status}`);
+            setLoadError(`Server error: ${graphResponse.status}`);
           }
           return;
         }
@@ -163,19 +165,17 @@ export function App() {
           if (!cancelled) {
             setGraphDiff(nextDiff);
           }
-        } catch (error) {
-          console.error("Error fetching diff from server", error);
+        } catch {
           if (!cancelled) {
             setGraphDiff(null);
           }
         }
-      } catch (error) {
-        console.error("Error fetching graph from server", error);
+      } catch {
         if (!cancelled) {
           setGraph(null);
           setGraphDiff(null);
           setSelectedNodeId(null);
-          setLoadError("Failed to fetch graph from server.");
+          setLoadError("Failed to connect to server.");
         }
       }
     }
@@ -215,8 +215,7 @@ export function App() {
         setGraphDiff(null);
         setSelectedNodeId(null);
         setLoadError(null);
-      } catch (error) {
-        console.error("Failed to parse graph JSON", error);
+      } catch {
         setGraph(null);
         setGraphDiff(null);
         setSelectedNodeId(null);
@@ -233,6 +232,7 @@ export function App() {
   };
 
   const toggleNodeType = (type: NodeType) => {
+    setActivePreset(null);
     setVisibleNodeTypes((prev) => {
       const next = new Set(prev);
       if (next.has(type)) next.delete(type);
@@ -242,6 +242,7 @@ export function App() {
   };
 
   const toggleEdgeKind = (kind: EdgeKind) => {
+    setActivePreset(null);
     setVisibleEdgeKinds((prev) => {
       const next = new Set(prev);
       if (next.has(kind)) next.delete(kind);
@@ -251,6 +252,7 @@ export function App() {
   };
 
   const applyPreset = (preset: LayerPreset) => {
+    setActivePreset(preset);
     if (preset === "user-flow") {
       setVisibleNodeTypes(new Set(USER_FLOW_NODE_TYPES));
       setVisibleEdgeKinds(new Set(USER_FLOW_EDGE_KINDS));
@@ -285,8 +287,7 @@ export function App() {
 
       const payload = (await response.json()) as { route: string; dbModels: Node[] };
       setQueryResult(payload.dbModels);
-    } catch (error) {
-      console.error("Error fetching page-to-db query", error);
+    } catch {
       setQueryResult(null);
       setQueryError("Failed to fetch page -> db query.");
     } finally {
@@ -302,18 +303,11 @@ export function App() {
       : baseGraph;
   const selectedNode =
     renderedGraph?.nodes.find((node) => node.id === selectedNodeId) ?? null;
-  const graphModeLabel = graphDiff
-    ? "Diff mode"
-    : graph
-      ? "Graph mode"
-      : useServer
-        ? "Server mode"
-        : "No file loaded";
-  const emptyStateLabel = useServer
-    ? "Waiting for graph from server."
-    : "Select a graph JSON file to visualize.";
   const nodeStatusById = graphDiff ? buildNodeStatusById(graphDiff) : undefined;
   const edgeStatusByKey = graphDiff ? buildEdgeStatusByKey(graphDiff) : undefined;
+
+  const nodeCount = baseGraph?.nodes.length ?? 0;
+  const edgeCount = baseGraph?.edges.length ?? 0;
 
   useEffect(() => {
     if (!baseGraph || pageRoutes.length === 0) {
@@ -326,210 +320,198 @@ export function App() {
     }
   }, [baseGraph, focusedPageRoute, pageRoutes]);
 
+  const presets: { key: LayerPreset; label: string }[] = [
+    { key: "user-flow", label: "User Flow" },
+    { key: "data-flow", label: "Data Flow" },
+    { key: "full-flow", label: "Full" },
+  ];
+
   return (
-    <div
-      style={{
-        display: "flex",
-        height: "100vh",
-        background: "linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%)",
-      }}
-    >
-      <aside
-        style={{
-          width: 260,
-          padding: 16,
-          borderRight: "1px solid rgba(148, 163, 184, 0.35)",
-          boxSizing: "border-box",
-          background: "rgba(255, 255, 255, 0.88)",
-          backdropFilter: "blur(10px)",
-          overflowY: "auto",
-        }}
-      >
-        <h1 style={{ fontSize: 18, marginBottom: 12 }}>next-arch-map viewer</h1>
+    <div className="flex h-screen bg-gradient-to-b from-slate-50 to-slate-100">
+      {/* Sidebar */}
+      <aside className="w-72 flex-shrink-0 border-r border-sidebar-border bg-sidebar backdrop-blur-xl overflow-y-auto">
+        <div className="p-5 space-y-5">
+          {/* Header */}
+          <div>
+            <h1 className="text-base font-bold text-slate-900 tracking-tight">
+              next-arch-map
+            </h1>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Architecture graph viewer
+            </p>
+          </div>
 
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", fontSize: 13 }}>
-            <input
-              type="checkbox"
-              checked={useServer}
-              onChange={(event) => setUseServer(event.target.checked)}
-            />{" "}
-            Use server (auto-refresh)
-          </label>
-          {useServer && (
-            <input
-              type="text"
-              value={serverUrl}
-              onChange={(event) => setServerUrl(event.target.value)}
-              style={{ width: "100%", marginTop: 4, fontSize: 12 }}
-              placeholder="http://localhost:4321"
-            />
-          )}
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", marginBottom: 4, fontSize: 13 }}>
-            Load graph or diff JSON
-          </label>
-          <input
-            type="file"
-            accept="application/json,.json"
-            onChange={handleFileChange}
-            disabled={useServer}
-          />
-        </div>
-
-        {useServer && (
-          <div
-            style={{
-              marginBottom: 16,
-              padding: 12,
-              borderRadius: 8,
-              background: "#f8fafc",
-              border: "1px solid rgba(148, 163, 184, 0.25)",
-            }}
-          >
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-              Page to DB
-            </div>
-            <input
-              type="text"
-              value={queryRoute}
-              onChange={(event) => setQueryRoute(event.target.value)}
-              style={{ width: "100%", marginBottom: 8, fontSize: 12 }}
-              placeholder="/dashboard"
-            />
-            <button
-              type="button"
-              onClick={() => void handlePageToDbQuery()}
-              disabled={isQueryLoading}
-              style={{
-                width: "100%",
-                padding: "8px 10px",
-                borderRadius: 6,
-                border: "1px solid #cbd5e1",
-                background: "#fff",
-                fontSize: 12,
-                cursor: isQueryLoading ? "wait" : "pointer",
-              }}
-            >
-              {isQueryLoading ? "Loading..." : "Show DB for page"}
-            </button>
-
-            {queryError && (
-              <div style={{ marginTop: 8, fontSize: 12, color: "#991b1b" }}>{queryError}</div>
-            )}
-
-            {queryResult && (
-              <div style={{ marginTop: 8, fontSize: 12, color: "#334155" }}>
-                {queryResult.length > 0 ? (
-                  <pre
-                    style={{
-                      margin: 0,
-                      padding: 8,
-                      background: "#fff",
-                      borderRadius: 6,
-                      overflow: "auto",
-                    }}
-                  >
-                    {JSON.stringify(queryResult, null, 2)}
-                  </pre>
-                ) : (
-                  <div>No DB models found for this page.</div>
+          {/* Status badge */}
+          {baseGraph ? (
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              </span>
+              <span className="text-xs text-slate-500">
+                {nodeCount} nodes, {edgeCount} edges
+                {graphDiff && (
+                  <span className="ml-1 text-emerald-600 font-medium">
+                    (diff)
+                  </span>
                 )}
+              </span>
+            </div>
+          ) : loadError ? (
+            <div className="rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-xs text-red-600">
+              {loadError}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-slate-300" />
+              </span>
+              <span className="text-xs text-slate-400">
+                {useServer ? "Connecting..." : "No graph loaded"}
+              </span>
+            </div>
+          )}
+
+          {/* Server toggle */}
+          <div className="rounded-lg bg-slate-50 border border-slate-200/60 p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-slate-700" htmlFor="server-switch">
+                Live server
+              </label>
+              <Switch.Root
+                id="server-switch"
+                checked={useServer}
+                onCheckedChange={setUseServer}
+                className="w-9 h-5 rounded-full bg-slate-200 transition-colors cursor-pointer"
+              >
+                <Switch.Thumb className="block w-4 h-4 rounded-full bg-white shadow-sm translate-x-0.5 transition-transform" />
+              </Switch.Root>
+            </div>
+            {useServer && (
+              <input
+                type="text"
+                value={serverUrl}
+                onChange={(event) => setServerUrl(event.target.value)}
+                className="w-full text-[11px] font-mono px-2 py-1.5 rounded-md border border-slate-200 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-shadow"
+                placeholder="http://localhost:4321"
+              />
+            )}
+            {!useServer && (
+              <div>
+                <label className="text-[11px] text-slate-500 block mb-1.5">
+                  Load graph JSON
+                </label>
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  onChange={handleFileChange}
+                  className="text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-[11px] file:font-medium file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 file:cursor-pointer cursor-pointer"
+                />
               </div>
             )}
           </div>
-        )}
 
-        {baseGraph && pageRoutes.length > 0 && (
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: "block", marginBottom: 4, fontSize: 13 }}>
-              Focused page
-            </label>
-            <select
-              value={focusedPageRoute ?? ""}
-              onChange={(event) => setFocusedPageRoute(event.target.value || null)}
-              style={{ width: "100%", fontSize: 13 }}
-            >
-              <option value="">(All pages)</option>
-              {pageRoutes.map((route) => (
-                <option key={route} value={route}>
-                  {route}
-                </option>
+          {/* Page focus */}
+          {baseGraph && pageRoutes.length > 0 && (
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block mb-1.5">
+                Focus page
+              </label>
+              <select
+                value={focusedPageRoute ?? ""}
+                onChange={(event) => setFocusedPageRoute(event.target.value || null)}
+                className="w-full text-xs px-2.5 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-shadow cursor-pointer"
+              >
+                <option value="">All pages</option>
+                {pageRoutes.map((route) => (
+                  <option key={route} value={route}>
+                    {route}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Presets */}
+          <div>
+            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
+              View preset
+            </h3>
+            <div className="flex gap-1.5">
+              {presets.map((preset) => (
+                <button
+                  key={preset.key}
+                  type="button"
+                  onClick={() => applyPreset(preset.key)}
+                  className={`flex-1 px-2 py-1.5 rounded-md text-[11px] font-medium transition-colors cursor-pointer ${
+                    activePreset === preset.key
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300"
+                  }`}
+                >
+                  {preset.label}
+                </button>
               ))}
-            </select>
+            </div>
           </div>
-        )}
 
-        <div
-          style={{
-            marginBottom: 16,
-            borderRadius: 8,
-            padding: "10px 12px",
-            background: graphDiff ? "#ecfdf5" : "#eff6ff",
-            color: graphDiff ? "#166534" : "#1d4ed8",
-            fontSize: 12,
-          }}
-        >
-          {graphModeLabel}
+          {/* Filters */}
+          <Filters
+            allNodeTypes={ALL_NODE_TYPES}
+            allEdgeKinds={ALL_EDGE_KINDS}
+            visibleNodeTypes={visibleNodeTypes}
+            visibleEdgeKinds={visibleEdgeKinds}
+            onToggleNodeType={toggleNodeType}
+            onToggleEdgeKind={toggleEdgeKind}
+          />
+
+          {/* Query */}
+          {useServer && (
+            <div className="rounded-lg bg-slate-50 border border-slate-200/60 p-3 space-y-2.5">
+              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                Page to DB query
+              </h3>
+              <input
+                type="text"
+                value={queryRoute}
+                onChange={(event) => setQueryRoute(event.target.value)}
+                className="w-full text-xs font-mono px-2.5 py-1.5 rounded-md border border-slate-200 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-shadow"
+                placeholder="/dashboard"
+              />
+              <button
+                type="button"
+                onClick={() => void handlePageToDbQuery()}
+                disabled={isQueryLoading}
+                className="w-full py-1.5 rounded-md text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-wait transition-colors cursor-pointer"
+              >
+                {isQueryLoading ? "Loading..." : "Query"}
+              </button>
+
+              {queryError && (
+                <div className="text-xs text-red-600">{queryError}</div>
+              )}
+
+              {queryResult && (
+                <div className="text-xs text-slate-600">
+                  {queryResult.length > 0 ? (
+                    <pre className="p-2 bg-white rounded-md border border-slate-100 overflow-auto max-h-32 text-[11px] font-mono">
+                      {JSON.stringify(queryResult, null, 2)}
+                    </pre>
+                  ) : (
+                    <span className="text-slate-400">No DB models found.</span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Node details */}
+          <NodeDetails node={selectedNode} />
         </div>
-
-        {loadError && (
-          <div
-            style={{
-              marginBottom: 16,
-              borderRadius: 8,
-              padding: "10px 12px",
-              background: "#fee2e2",
-              color: "#991b1b",
-              fontSize: 12,
-            }}
-          >
-            {loadError}
-          </div>
-        )}
-
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 13, marginBottom: 4 }}>View preset</div>
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-            <button
-              type="button"
-              style={{ fontSize: 11, padding: "2px 6px" }}
-              onClick={() => applyPreset("user-flow")}
-            >
-              User Flow
-            </button>
-            <button
-              type="button"
-              style={{ fontSize: 11, padding: "2px 6px" }}
-              onClick={() => applyPreset("data-flow")}
-            >
-              Data Flow
-            </button>
-            <button
-              type="button"
-              style={{ fontSize: 11, padding: "2px 6px" }}
-              onClick={() => applyPreset("full-flow")}
-            >
-              Full Flow
-            </button>
-          </div>
-        </div>
-
-        <Filters
-          allNodeTypes={ALL_NODE_TYPES}
-          allEdgeKinds={ALL_EDGE_KINDS}
-          visibleNodeTypes={visibleNodeTypes}
-          visibleEdgeKinds={visibleEdgeKinds}
-          onToggleNodeType={toggleNodeType}
-          onToggleEdgeKind={toggleEdgeKind}
-        />
-
-        <NodeDetails node={selectedNode} />
       </aside>
 
-      <main style={{ flex: 1, minWidth: 0 }}>
+      {/* Graph area */}
+      <main className="flex-1 min-w-0">
         {renderedGraph ? (
           <GraphView
             graph={renderedGraph}
@@ -541,18 +523,19 @@ export function App() {
             edgeStatusByKey={edgeStatusByKey}
           />
         ) : (
-          <div
-            style={{
-              height: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#475569",
-              padding: 24,
-              boxSizing: "border-box",
-            }}
-          >
-            <p>{emptyStateLabel}</p>
+          <div className="h-full flex items-center justify-center">
+            <div className="text-center space-y-3">
+              <div className="text-4xl opacity-20">
+                <svg className="mx-auto h-12 w-12 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                </svg>
+              </div>
+              <p className="text-sm text-slate-400">
+                {useServer
+                  ? "Waiting for graph from server..."
+                  : "Load a graph JSON file to visualize"}
+              </p>
+            </div>
           </div>
         )}
       </main>

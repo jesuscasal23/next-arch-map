@@ -24,32 +24,43 @@ type GraphViewProps = {
 };
 
 const NODE_COLOR: Record<NodeType, string> = {
-  page: "#1d4ed8",
+  page: "#3b82f6",
+  endpoint: "#059669",
+  db: "#dc2626",
+  ui: "#f97316",
+  handler: "#14b8a6",
+  action: "#fbbf24",
+};
+
+const NODE_BORDER: Record<NodeType, string> = {
+  page: "#2563eb",
   endpoint: "#047857",
   db: "#b91c1c",
-  ui: "#b45309",
+  ui: "#ea580c",
   handler: "#0d9488",
-  action: "#facc15",
+  action: "#f59e0b",
 };
 
 const EDGE_COLOR: Record<EdgeKind, string> = {
-  "page-endpoint": "#0891b2",
-  "endpoint-db": "#ea580c",
-  "page-ui": "#7c3aed",
+  "page-endpoint": "#06b6d4",
+  "endpoint-db": "#f97316",
+  "page-ui": "#8b5cf6",
   "endpoint-handler": "#22c55e",
-  "page-action": "#facc15",
+  "page-action": "#eab308",
   "action-endpoint": "#a855f7",
 };
 
 const DIFF_BORDER_COLOR: Record<DiffStatus, string> = {
   added: "#22c55e",
   removed: "#ef4444",
-  unchanged: "rgba(15, 23, 42, 0.18)",
+  modified: "#f59e0b",
+  unchanged: "rgba(15, 23, 42, 0.12)",
 };
 
 const DIFF_EDGE_COLOR: Record<DiffStatus, string> = {
   added: "#22c55e",
   removed: "#ef4444",
+  modified: "#f59e0b",
   unchanged: "#000000",
 };
 
@@ -88,15 +99,15 @@ export function GraphView(props: GraphViewProps) {
     const activeTypeOrder = typeOrder.filter((type) => (nodesByType.get(type)?.length ?? 0) > 0);
 
     const flowNodes: FlowNode[] = [];
-    const columnWidth = 280;
-    const rowHeight = 94;
+    const columnWidth = 300;
+    const rowHeight = 80;
 
     activeTypeOrder.forEach((type, columnIndex) => {
       const nodes = nodesByType.get(type) ?? [];
       nodes.forEach((node, rowIndex) => {
         const isSelected = node.id === selectedNodeId;
         const status = nodeStatusById?.get(node.id) ?? "unchanged";
-        const borderColor = DIFF_BORDER_COLOR[status];
+        const borderColor = isSelected ? "#1e293b" : DIFF_BORDER_COLOR[status];
         const borderStyle = status === "removed" ? "dashed" : "solid";
 
         flowNodes.push({
@@ -110,22 +121,25 @@ export function GraphView(props: GraphViewProps) {
           targetPosition: Position.Left,
           selectable: true,
           style: {
-            width: 190,
-            borderRadius: 10,
-            border: `${isSelected ? 3 : 2}px ${borderStyle} ${isSelected ? "#111827" : borderColor}`,
-            padding: 10,
+            width: 200,
+            borderRadius: 12,
+            border: `2px ${borderStyle} ${borderColor}`,
+            padding: "10px 14px",
             background: NODE_COLOR[node.type],
-            color: node.type === "action" ? "#111827" : "#fff",
+            color: node.type === "action" ? "#1e293b" : "#ffffff",
             fontSize: 12,
             fontWeight: 600,
-            opacity: status === "removed" ? 0.78 : 1,
+            fontFamily: "'Inter', -apple-system, sans-serif",
+            letterSpacing: "-0.01em",
+            opacity: status === "removed" ? 0.65 : 1,
             boxShadow: isSelected
-              ? "0 0 0 4px rgba(15, 23, 42, 0.12)"
+              ? `0 0 0 3px rgba(30, 41, 59, 0.15), 0 8px 24px rgba(0, 0, 0, 0.12)`
               : status === "added"
-                ? "0 0 0 3px rgba(34, 197, 94, 0.16)"
+                ? `0 0 0 3px rgba(34, 197, 94, 0.2)`
                 : status === "removed"
-                  ? "0 0 0 3px rgba(239, 68, 68, 0.12)"
-              : "0 10px 30px rgba(15, 23, 42, 0.08)",
+                  ? `0 0 0 3px rgba(239, 68, 68, 0.15)`
+                  : `0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04)`,
+            transition: "box-shadow 0.15s ease, border-color 0.15s ease",
           },
         });
       });
@@ -149,9 +163,9 @@ export function GraphView(props: GraphViewProps) {
           animated: false,
           style: {
             stroke: strokeColor,
-            strokeWidth: 1.75,
+            strokeWidth: 1.5,
             strokeDasharray: status === "removed" ? "6 4" : undefined,
-            opacity: status === "removed" ? 0.76 : 1,
+            opacity: status === "removed" ? 0.6 : 0.85,
           },
           markerEnd: {
             type: MarkerType.ArrowClosed,
@@ -171,7 +185,7 @@ export function GraphView(props: GraphViewProps) {
   ]);
 
   return (
-    <div style={{ width: "100%", height: "100%" }}>
+    <div className="w-full h-full">
       <ReactFlow
         nodes={flowNodes}
         edges={flowEdges}
@@ -184,7 +198,7 @@ export function GraphView(props: GraphViewProps) {
         elementsSelectable
         proOptions={{ hideAttribution: true }}
       >
-        <Background gap={18} size={1} color="#e5e7eb" />
+        <Background gap={20} size={1} color="#e2e8f0" />
         <MiniMap
           pannable
           zoomable
@@ -192,8 +206,19 @@ export function GraphView(props: GraphViewProps) {
             const type = graph.nodes.find((graphNode) => graphNode.id === node.id)?.type;
             return type ? NODE_COLOR[type] : "#94a3b8";
           }}
+          style={{
+            borderRadius: 8,
+            border: "1px solid rgba(148, 163, 184, 0.2)",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.06)",
+          }}
         />
-        <Controls />
+        <Controls
+          style={{
+            borderRadius: 8,
+            border: "1px solid rgba(148, 163, 184, 0.2)",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.06)",
+          }}
+        />
       </ReactFlow>
     </div>
   );

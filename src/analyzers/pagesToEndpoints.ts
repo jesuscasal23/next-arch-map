@@ -36,12 +36,14 @@ type AnalyzePagesToEndpointsOptions = {
   extraScanDirs?: string[];
   httpClientIdentifiers?: string[];
   httpClientMethods?: string[];
+  sdkClientIdentifiers?: string[];
 };
 
 const DEFAULT_APP_DIRS = ["app", "src/app"];
 const DEFAULT_EXTRA_SCAN_DIRS = ["src/features", "src/services", "src/lib", "src/hooks"];
 const DEFAULT_HTTP_CLIENT_IDENTIFIERS = ["fetch", "axios", "apiClient"];
 const DEFAULT_HTTP_CLIENT_METHODS = ["get", "post", "put", "patch", "delete", "head", "options"];
+const DEFAULT_SDK_CLIENT_IDENTIFIERS = ["supabase"];
 
 export async function analyzePagesToEndpoints(
   options: AnalyzePagesToEndpointsOptions,
@@ -62,6 +64,9 @@ export async function analyzePagesToEndpoints(
   );
   const httpClientMethods = new Set(
     (options.httpClientMethods ?? DEFAULT_HTTP_CLIENT_METHODS).map((value) => value.toLowerCase()),
+  );
+  const sdkClientIdentifiers = new Set(
+    (options.sdkClientIdentifiers ?? DEFAULT_SDK_CLIENT_IDENTIFIERS).map((value) => value.trim()),
   );
   const nodes: Node[] = [];
   const edges: Edge[] = [];
@@ -86,7 +91,7 @@ export async function analyzePagesToEndpoints(
         // Non-page files (route handlers, layouts, helpers) under app/ only
         // contribute endpoint nodes without creating fake page flows.
         if (!isPageFile(filePath)) {
-          const httpCalls = collectHttpCalls(sourceFile, httpClientIdentifiers, httpClientMethods);
+          const httpCalls = collectHttpCalls(sourceFile, httpClientIdentifiers, httpClientMethods, sdkClientIdentifiers);
           for (const call of httpCalls) {
             ensureNode(nodes, nodeIds, buildEndpointNode(call.endpoint, filePath));
           }
@@ -100,6 +105,7 @@ export async function analyzePagesToEndpoints(
           projectRoot,
           httpClientIdentifiers,
           httpClientMethods,
+          sdkClientIdentifiers,
           sourceFileCache,
         );
 
@@ -179,7 +185,7 @@ export async function analyzePagesToEndpoints(
           continue;
         }
 
-        for (const call of collectHttpCalls(sourceFile, httpClientIdentifiers, httpClientMethods)) {
+        for (const call of collectHttpCalls(sourceFile, httpClientIdentifiers, httpClientMethods, sdkClientIdentifiers)) {
           ensureNode(nodes, nodeIds, buildEndpointNode(call.endpoint, filePath));
         }
       } catch (error) {
@@ -232,6 +238,7 @@ function collectHttpCallsTransitively(
   projectRoot: string,
   httpClientIdentifiers: Set<string>,
   httpClientMethods: Set<string>,
+  sdkClientIdentifiers: Set<string>,
   sourceFileCache: Map<string, ts.SourceFile>,
   visited?: Set<string>,
 ): HttpCall[] {
@@ -247,7 +254,7 @@ function collectHttpCallsTransitively(
     return [];
   }
 
-  const calls = collectHttpCalls(sourceFile, httpClientIdentifiers, httpClientMethods);
+  const calls = collectHttpCalls(sourceFile, httpClientIdentifiers, httpClientMethods, sdkClientIdentifiers);
 
   for (const specifier of collectImportSpecifiers(sourceFile)) {
     const resolved = resolveLocalModulePath(filePath, specifier, projectRoot);
@@ -260,6 +267,7 @@ function collectHttpCallsTransitively(
       projectRoot,
       httpClientIdentifiers,
       httpClientMethods,
+      sdkClientIdentifiers,
       sourceFileCache,
       seen,
     );
@@ -273,6 +281,7 @@ function collectHttpCalls(
   sourceFile: ts.SourceFile,
   httpClientIdentifiers: Set<string>,
   httpClientMethods: Set<string>,
+  sdkClientIdentifiers: Set<string>,
 ): HttpCall[] {
   const calls: HttpCall[] = [];
   const constMap = collectStringConstants(sourceFile);
@@ -286,6 +295,15 @@ function collectHttpCalls(
           method: httpCall.method,
           node,
         });
+      } else {
+        const sdkCall = parseSdkCall(node, sdkClientIdentifiers);
+        if (sdkCall) {
+          calls.push({
+            endpoint: sdkCall.endpoint,
+            method: sdkCall.method,
+            node,
+          });
+        }
       }
     }
 
@@ -327,6 +345,41 @@ function parseHttpCall(
   }
 
   return null;
+}
+
+/**
+ * Detect SDK-style calls like `supabase.auth.signInWithPassword(...)`.
+ * Walks the property access chain to find a root identifier that matches
+ * one of the configured SDK client identifiers, then uses the full
+ * method chain as the endpoint label.
+ */
+function parseSdkCall(
+  node: ts.CallExpression,
+  sdkClientIdentifiers: Set<string>,
+): Omit<HttpCall, "node"> | null {
+  if (!ts.isPropertyAccessExpression(node.expression)) {
+    return null;
+  }
+
+  const segments: string[] = [];
+  let current: ts.Expression = node.expression;
+
+  while (ts.isPropertyAccessExpression(current)) {
+    segments.unshift(current.name.text);
+    current = current.expression;
+  }
+
+  if (!ts.isIdentifier(current) || !sdkClientIdentifiers.has(current.text)) {
+    return null;
+  }
+
+  // Need at least one segment beyond the client name (e.g. supabase.auth.method)
+  if (segments.length < 2) {
+    return null;
+  }
+
+  const endpoint = `${current.text}.${segments.join(".")}`;
+  return { endpoint };
 }
 
 function getEndpointArgument(

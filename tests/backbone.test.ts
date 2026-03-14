@@ -214,6 +214,57 @@ export function useTrips() {
 });
 
 // ===========================================================================
+// Test 1c: pagesToEndpoints — detects SDK client calls (e.g. Supabase)
+// ===========================================================================
+
+describe("pagesToEndpoints: detects SDK client calls", () => {
+  let tmpDir: string;
+  let graph: Graph;
+
+  beforeAll(async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "arch-sdk-test-"));
+
+    writeFixtureFile(
+      tmpDir,
+      "src/app/login/page.tsx",
+      `
+import { createClient } from "@/lib/supabase/client";
+
+export default function LoginPage() {
+  const handleSubmit = async (email: string, password: string) => {
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+  };
+  return <form onSubmit={handleSubmit}><button>Login</button></form>;
+}
+`,
+    );
+
+    graph = await analyzePagesToEndpoints({ projectRoot: tmpDir });
+  });
+
+  afterAll(() => fs.rmSync(tmpDir, { recursive: true }));
+
+  it("creates endpoint node for supabase.auth.signInWithPassword", () => {
+    const endpointNode = graph.nodes.find(
+      (n) => n.id === "endpoint:supabase.auth.signInWithPassword",
+    );
+    expect(endpointNode).toBeDefined();
+  });
+
+  it("connects page to SDK endpoint", () => {
+    expect(
+      graph.edges.some(
+        (e) =>
+          e.kind === "page-endpoint" &&
+          e.from === "page:/login" &&
+          e.to === "endpoint:supabase.auth.signInWithPassword",
+      ),
+    ).toBe(true);
+  });
+});
+
+// ===========================================================================
 // Test 2: mergePartial — metadata precedence on shared nodes
 // ===========================================================================
 

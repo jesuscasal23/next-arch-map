@@ -3,6 +3,7 @@ import http from "node:http";
 import path from "node:path";
 import chokidar from "chokidar";
 import { analyzeProject } from "./index.js";
+import { generateDescribeContext } from "./describe.js";
 import { diffGraphs } from "./diff.js";
 import type { Graph, Node } from "./model.js";
 import { getDbModelsForPage, getEndpointsForPage, getPagesForDbModel } from "./query.js";
@@ -52,6 +53,11 @@ export async function serve(options: ServeOptions): Promise<void> {
   let isAnalyzing = false;
   let rerunRequested = false;
   let suppressGraphFileWatch = false;
+  let hasShownDescribeHint = false;
+  const describePath = path.resolve(
+    projectRoot,
+    path.join(path.dirname(options.graphPath ?? "arch/graph.full.json"), "describe-context.md"),
+  );
 
   function readExistingGraph(): Graph | null {
     try {
@@ -95,6 +101,13 @@ export async function serve(options: ServeOptions): Promise<void> {
         suppressGraphFileWatch = false;
       }, 500);
 
+      // Generate describe context for AI agents
+      generateDescribeContext({
+        graphPath,
+        outPath: describePath,
+        onlyMissing: true,
+      });
+
       const pageCount = currentGraph.nodes.filter((node) => node.type === "page").length;
       const endpointCount = currentGraph.nodes.filter((node) => node.type === "endpoint").length;
       const handlerCount = currentGraph.nodes.filter((node) => node.type === "handler").length;
@@ -112,6 +125,18 @@ export async function serve(options: ServeOptions): Promise<void> {
           `edges=${currentGraph.edges.length}`,
         ].join(" "),
       );
+
+      if (!hasShownDescribeHint) {
+        hasShownDescribeHint = true;
+        const relGraphPath = path.relative(process.cwd(), graphPath);
+        const relDescribePath = path.relative(process.cwd(), describePath);
+        console.log(
+          "\n" +
+            "To add AI-generated descriptions to the graph, tell your AI agent:\n" +
+            "\n" +
+            `  Read ${relDescribePath} and follow the instructions to update ${relGraphPath}\n`,
+        );
+      }
     } catch (error) {
       console.error("Analysis error:", error);
     } finally {

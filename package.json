@@ -1,0 +1,40 @@
+{
+  "name": "next-arch-map",
+  "version": "0.1.0",
+  "description": "Static analyzer that builds a multi-layer architecture graph for Next.js-style apps.",
+  "type": "module",
+  "bin": {
+    "next-arch-map": "dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./model": {
+      "types": "./dist/model.d.ts",
+      "import": "./dist/model.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "examples"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json"
+  },
+  "keywords": [
+    "nextjs",
+    "architecture",
+    "graph",
+    "static-analysis",
+    "typescript"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "typescript": "^5.8.2"
+  }
+}

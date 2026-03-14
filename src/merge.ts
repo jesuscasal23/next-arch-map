@@ -1,0 +1,48 @@
+import type { Edge, Graph, Node } from "./model.js";
+
+function buildEdgeKey(edge: Pick<Edge, "from" | "to" | "kind">): string {
+  return `${edge.from}::${edge.to}::${edge.kind}`;
+}
+
+export function mergeGraphs(graphs: Graph[]): Graph {
+  return graphs.reduce<Graph>(
+    (accumulator, graph) => mergePartial(accumulator, graph),
+    { nodes: [], edges: [] }
+  );
+}
+
+export function mergePartial(base: Graph, additions: { nodes: Node[]; edges: Edge[] }): Graph {
+  const nodesById = new Map<string, Node>();
+  const edgesByKey = new Map<string, Edge>();
+
+  for (const node of base.nodes) {
+    nodesById.set(node.id, node);
+  }
+
+  for (const node of additions.nodes) {
+    if (!nodesById.has(node.id)) {
+      nodesById.set(node.id, node);
+    }
+  }
+
+  for (const edge of base.edges) {
+    edgesByKey.set(buildEdgeKey(edge), edge);
+  }
+
+  for (const edge of additions.edges) {
+    const edgeKey = buildEdgeKey(edge);
+    if (!edgesByKey.has(edgeKey)) {
+      edgesByKey.set(edgeKey, edge);
+    }
+  }
+
+  return {
+    nodes: [...nodesById.values()].sort((left, right) => left.id.localeCompare(right.id)),
+    edges: [...edgesByKey.values()].sort(
+      (left, right) =>
+        left.kind.localeCompare(right.kind) ||
+        left.from.localeCompare(right.from) ||
+        left.to.localeCompare(right.to)
+    ),
+  };
+}

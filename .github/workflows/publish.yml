@@ -22,13 +22,15 @@ jobs:
 
       - run: npm run build
 
-      - name: Set version from commit count
+      - name: Set version and publish
         run: |
           COMMIT_COUNT=$(git rev-list --count HEAD)
-          npm version "0.1.${COMMIT_COUNT}" --no-git-tag-version
-          echo "Publishing version 0.1.${COMMIT_COUNT}"
-
-      - name: Publish
-        run: npm publish --provenance --access public
+          TARGET_VERSION="0.1.${COMMIT_COUNT}"
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          if [ "$TARGET_VERSION" != "$CURRENT_VERSION" ]; then
+            npm version "$TARGET_VERSION" --no-git-tag-version
+          fi
+          echo "Publishing version $TARGET_VERSION"
+          npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

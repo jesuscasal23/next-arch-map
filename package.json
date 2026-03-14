@@ -23,7 +23,7 @@
     "examples"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && chmod +x dist/cli.js",
     "check": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "lint": "eslint src/ tests/",

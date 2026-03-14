@@ -384,3 +384,15 @@ export function buildDbNode(modelName: string, filePath: string) {
   };
 }
 
+export function buildServiceNode(serviceName: string, filePath: string) {
+  return {
+    id: `service:${serviceName}`,
+    type: "service" as const,
+    label: serviceName,
+    meta: {
+      filePath,
+      service: serviceName,
+    },
+  };
+}
+

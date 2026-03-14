@@ -245,20 +245,19 @@ export default function LoginPage() {
 
   afterAll(() => fs.rmSync(tmpDir, { recursive: true }));
 
-  it("creates endpoint node for supabase.auth.signInWithPassword", () => {
-    const endpointNode = graph.nodes.find(
-      (n) => n.id === "endpoint:supabase.auth.signInWithPassword",
-    );
-    expect(endpointNode).toBeDefined();
+  it("creates service node for supabase", () => {
+    const serviceNode = graph.nodes.find((n) => n.id === "service:supabase");
+    expect(serviceNode).toBeDefined();
+    expect(serviceNode!.type).toBe("service");
   });
 
-  it("connects page to SDK endpoint", () => {
+  it("connects page to service with page-service edge", () => {
     expect(
       graph.edges.some(
         (e) =>
-          e.kind === "page-endpoint" &&
+          e.kind === "page-service" &&
           e.from === "page:/login" &&
-          e.to === "endpoint:supabase.auth.signInWithPassword",
+          e.to === "service:supabase",
       ),
     ).toBe(true);
   });

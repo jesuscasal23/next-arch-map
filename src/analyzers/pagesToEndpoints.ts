@@ -6,6 +6,7 @@ import {
   buildEdgeKey,
   buildEndpointNode,
   buildPageNode,
+  buildServiceNode,
   collectStringConstants,
   ensureNode,
   getExistingDirectories,
@@ -23,6 +24,7 @@ type HttpCall = {
   endpoint: string;
   method?: string;
   node: ts.CallExpression;
+  sdkClient?: string;
 };
 
 type ActionContext = {
@@ -113,11 +115,33 @@ export async function analyzePagesToEndpoints(
         ensureNode(nodes, nodeIds, buildPageNode(route, filePath));
 
         for (const call of httpCalls) {
+          const pageNode = ensureNode(nodes, nodeIds, buildPageNode(route, filePath));
+
+          // SDK calls create a single service node per client (e.g. "supabase")
+          if (call.sdkClient) {
+            const serviceNode = ensureNode(
+              nodes,
+              nodeIds,
+              buildServiceNode(call.sdkClient, filePath),
+            );
+
+            const edgeKey = buildEdgeKey(pageNode.id, serviceNode.id, "page-service");
+            if (!edgeKeys.has(edgeKey)) {
+              edgeKeys.add(edgeKey);
+              edges.push({
+                from: pageNode.id,
+                to: serviceNode.id,
+                kind: "page-service",
+              });
+            }
+            continue;
+          }
+
+          // HTTP calls create endpoint nodes with action intermediaries
           const nextCallIndex = (callIndexByRoute.get(route) ?? 0) + 1;
           callIndexByRoute.set(route, nextCallIndex);
           const actionContext = inferActionContext(call.node, sourceFile, nextCallIndex);
           const actionId = allocateActionId(route, actionContext.id, actionIdCountByRoute);
-          const pageNode = ensureNode(nodes, nodeIds, buildPageNode(route, filePath));
           const actionNode = ensureNode(
             nodes,
             nodeIds,
@@ -300,7 +324,7 @@ function collectHttpCalls(
         if (sdkCall) {
           calls.push({
             endpoint: sdkCall.endpoint,
-            method: sdkCall.method,
+            sdkClient: sdkCall.sdkClient,
             node,
           });
         }
@@ -378,8 +402,7 @@ function parseSdkCall(
     return null;
   }
 
-  const endpoint = `${current.text}.${segments.join(".")}`;
-  return { endpoint };
+  return { endpoint: current.text, sdkClient: current.text };
 }
 
 function getEndpointArgument(

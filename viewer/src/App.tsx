@@ -10,9 +10,11 @@ const ALL_NODE_TYPES: NodeType[] = [
   "endpoint",
   "handler",
   "db",
+  "service",
 ];
 const ALL_EDGE_KINDS: EdgeKind[] = [
   "page-endpoint",
+  "page-service",
   "endpoint-db",
   "endpoint-handler",
   "db-relation",

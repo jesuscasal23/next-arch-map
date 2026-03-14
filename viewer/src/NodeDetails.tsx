@@ -8,9 +8,8 @@ const TYPE_BADGE_COLORS: Record<NodeType, string> = {
   page: "bg-blue-100 text-blue-700",
   endpoint: "bg-emerald-100 text-emerald-700",
   handler: "bg-teal-100 text-teal-700",
-  action: "bg-amber-100 text-amber-700",
   db: "bg-red-100 text-red-700",
-  ui: "bg-orange-100 text-orange-700",
+  service: "bg-violet-100 text-violet-700",
 };
 
 export function NodeDetails({ node }: NodeDetailsProps) {
@@ -46,11 +45,11 @@ export function NodeDetails({ node }: NodeDetailsProps) {
           {node.id}
         </div>
 
-        {(node.meta?.descriptionLong || node.meta?.description) && (
+        {(node.meta?.descriptionLong ?? node.meta?.description) ? (
           <p className="text-xs text-slate-600 leading-relaxed">
             {String(node.meta.descriptionLong ?? node.meta.description)}
           </p>
-        )}
+        ) : null}
 
         {filePath !== undefined && filePath !== null && (
           <div className="text-[11px] text-slate-500">
@@ -59,7 +58,7 @@ export function NodeDetails({ node }: NodeDetailsProps) {
           </div>
         )}
 
-        {node.meta?.screenshot && (
+        {node.meta?.screenshot ? (
           <div className="mt-2">
             <img
               src={String(node.meta.screenshot)}
@@ -67,7 +66,7 @@ export function NodeDetails({ node }: NodeDetailsProps) {
               className="w-full rounded-md border border-slate-200"
             />
           </div>
-        )}
+        ) : null}
 
         {node.meta && (
           <pre className="mt-2 p-2.5 rounded-md bg-slate-50 border border-slate-100 text-[11px] font-mono text-slate-600 max-h-40 overflow-auto whitespace-pre-wrap break-all">

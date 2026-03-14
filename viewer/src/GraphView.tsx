@@ -7,7 +7,6 @@ import {
   MiniMap,
   Position,
   ReactFlow,
-  useReactFlow,
   type Edge as FlowEdge,
   type Node as FlowNode,
   type NodeMouseHandler,
@@ -31,13 +30,7 @@ const NODE_COLOR: Record<NodeType, string> = {
   endpoint: "#059669",
   db: "#dc2626",
   handler: "#14b8a6",
-};
-
-const NODE_BORDER: Record<NodeType, string> = {
-  page: "#2563eb",
-  endpoint: "#047857",
-  db: "#b91c1c",
-  handler: "#0d9488",
+  service: "#7c3aed",
 };
 
 const EDGE_COLOR: Record<EdgeKind, string> = {
@@ -47,19 +40,18 @@ const EDGE_COLOR: Record<EdgeKind, string> = {
   "page-action": "#8b5cf6",
   "action-endpoint": "#a855f7",
   "db-relation": "#94a3b8",
+  "page-service": "#a78bfa",
 };
 
 const DIFF_BORDER_COLOR: Record<DiffStatus, string> = {
   added: "#22c55e",
   removed: "#ef4444",
-  modified: "#f59e0b",
   unchanged: "rgba(15, 23, 42, 0.12)",
 };
 
 const DIFF_EDGE_COLOR: Record<DiffStatus, string> = {
   added: "#22c55e",
   removed: "#ef4444",
-  modified: "#f59e0b",
   unchanged: "#000000",
 };
 
@@ -337,7 +329,7 @@ export function GraphView(props: GraphViewProps) {
 
   // Compute layout without hover state — this is the expensive part
   const { flowNodes: baseFlowNodes, flowEdges: baseFlowEdges } = useMemo(() => {
-    const typeOrder: NodeType[] = ["page", "endpoint", "handler", "db"];
+    const typeOrder: NodeType[] = ["page", "endpoint", "handler", "db", "service"];
     const visibleNodes = graph.nodes.filter((node) => visibleNodeTypes.has(node.type));
     const visibleNodeIds = new Set(visibleNodes.map((node) => node.id));
     const nodesByType = new Map<NodeType, typeof visibleNodes>(

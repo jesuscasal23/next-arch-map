@@ -2,7 +2,8 @@ export type NodeType =
   | "page"
   | "endpoint"
   | "db"
-  | "handler";
+  | "handler"
+  | "service";
 
 export type Node = {
   id: string;
@@ -17,7 +18,8 @@ export type EdgeKind =
   | "endpoint-handler"
   | "page-action"
   | "action-endpoint"
-  | "db-relation";
+  | "db-relation"
+  | "page-service";
 
 export type Edge = {
   from: string;

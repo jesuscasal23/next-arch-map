@@ -46,6 +46,12 @@ export function NodeDetails({ node }: NodeDetailsProps) {
           {node.id}
         </div>
 
+        {(node.meta?.descriptionLong || node.meta?.description) && (
+          <p className="text-xs text-slate-600 leading-relaxed">
+            {String(node.meta.descriptionLong ?? node.meta.description)}
+          </p>
+        )}
+
         {filePath !== undefined && filePath !== null && (
           <div className="text-[11px] text-slate-500">
             <span className="text-slate-400">file: </span>
@@ -53,9 +59,27 @@ export function NodeDetails({ node }: NodeDetailsProps) {
           </div>
         )}
 
+        {node.meta?.screenshot && (
+          <div className="mt-2">
+            <img
+              src={String(node.meta.screenshot)}
+              alt={`Screenshot of ${node.label}`}
+              className="w-full rounded-md border border-slate-200"
+            />
+          </div>
+        )}
+
         {node.meta && (
           <pre className="mt-2 p-2.5 rounded-md bg-slate-50 border border-slate-100 text-[11px] font-mono text-slate-600 max-h-40 overflow-auto whitespace-pre-wrap break-all">
-            {JSON.stringify(node.meta, null, 2)}
+            {JSON.stringify(
+              Object.fromEntries(
+                Object.entries(node.meta).filter(
+                  ([key]) => key !== "screenshot" && key !== "description" && key !== "descriptionLong",
+                ),
+              ),
+              null,
+              2,
+            )}
           </pre>
         )}
       </div>

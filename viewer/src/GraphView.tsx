@@ -141,14 +141,34 @@ function reorderColumn(
   nodes.forEach((node, i) => nodeRowIndex.set(node.id, i));
 }
 
+function DescriptionLine({ text, dark }: { text: string; dark?: boolean }) {
+  return (
+    <div
+      style={{
+        marginTop: 3,
+        fontSize: 10,
+        fontWeight: 400,
+        opacity: 0.85,
+        lineHeight: 1.3,
+        color: dark ? "#1e293b" : "#ffffff",
+      }}
+    >
+      {text}
+    </div>
+  );
+}
+
 function PageNode({ data }: NodeProps) {
-  const screenshot = (data as Record<string, unknown>).screenshot as string | undefined;
+  const d = data as Record<string, unknown>;
+  const screenshot = d.screenshot as string | undefined;
+  const description = d.description as string | undefined;
   return (
     <div>
       <Handle type="target" position={Position.Left} style={{ visibility: "hidden" }} />
       <div style={{ fontSize: 12, fontWeight: 600 }}>
-        {String((data as Record<string, unknown>).label ?? "")}
+        {String(d.label ?? "")}
       </div>
+      {description && <DescriptionLine text={description} />}
       {screenshot && (
         <img
           src={screenshot}
@@ -166,7 +186,26 @@ function PageNode({ data }: NodeProps) {
   );
 }
 
-const nodeTypes = { pageNode: PageNode };
+function DescribedNode({ data }: NodeProps) {
+  const d = data as Record<string, unknown>;
+  const description = d.description as string | undefined;
+  const dark = d.dark as boolean | undefined;
+  return (
+    <div>
+      <Handle type="target" position={Position.Left} style={{ visibility: "hidden" }} />
+      <div style={{ fontSize: 12, fontWeight: 600 }}>
+        {String(d.label ?? "")}
+      </div>
+      {description && <DescriptionLine text={description} dark={dark} />}
+      <Handle type="source" position={Position.Right} style={{ visibility: "hidden" }} />
+    </div>
+  );
+}
+
+const nodeTypes = {
+  pageNode: PageNode,
+  describedNode: DescribedNode,
+};
 
 export function GraphView(props: GraphViewProps) {
   const {
@@ -238,11 +277,24 @@ export function GraphView(props: GraphViewProps) {
         const borderStyle = status === "removed" ? "dashed" : "solid";
         const isPage = node.type === "page";
         const screenshot = isPage ? (node.meta?.screenshot as string | undefined) : undefined;
+        const description = node.meta?.description as string | undefined;
+        const isDarkText = node.type === "action";
+
+        const nodeType = isPage
+          ? "pageNode"
+          : description
+            ? "describedNode"
+            : undefined;
 
         flowNodes.push({
           id: node.id,
-          ...(isPage ? { type: "pageNode" } : {}),
-          data: { label: node.label, ...(screenshot ? { screenshot } : {}) },
+          ...(nodeType ? { type: nodeType } : {}),
+          data: {
+            label: node.label,
+            ...(screenshot ? { screenshot } : {}),
+            ...(description ? { description } : {}),
+            ...(isDarkText ? { dark: true } : {}),
+          },
           position: {
             x: 80 + columnIndex * columnWidth,
             y: 80 + rowIndex * rowHeight,

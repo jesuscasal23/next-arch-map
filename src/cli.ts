@@ -5,6 +5,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { analyzeProject, diffGraphs } from "./index.js";
 import type { Graph } from "./model.js";
+import {
+  captureScreenshots,
+  generateParamsTemplate,
+} from "./screenshot.js";
 import { serve, type ServeOptions } from "./serve.js";
 import { readJsonFile, writeJsonFile } from "./utils.js";
 
@@ -29,6 +33,14 @@ type DevCliOptions = {
   appDirs?: string[];
 };
 
+type ScreenshotCliOptions = {
+  baseUrl: string;
+  graphPath: string;
+  outDir: string;
+  paramsPath: string;
+  generateParams: boolean;
+};
+
 async function main(): Promise<void> {
   const [commandOrArg, ...rest] = process.argv.slice(2);
 
@@ -41,6 +53,32 @@ async function main(): Promise<void> {
   if (commandOrArg === "serve") {
     const options = parseServeArgs(rest);
     await serve(options);
+    return;
+  }
+
+  if (commandOrArg === "screenshot") {
+    const options = parseScreenshotArgs(rest);
+
+    if (options.generateParams) {
+      generateParamsTemplate({
+        graphPath: path.resolve(options.graphPath),
+        outPath: path.resolve(options.paramsPath),
+      });
+      console.log(`params template written to ${options.paramsPath}`);
+      return;
+    }
+
+    if (!options.baseUrl) {
+      throw new Error("The screenshot command requires --base-url <url>.");
+    }
+
+    const result = await captureScreenshots({
+      baseUrl: options.baseUrl,
+      graphPath: path.resolve(options.graphPath),
+      outDir: path.resolve(options.outDir),
+      paramsPath: path.resolve(options.paramsPath),
+    });
+    logScreenshotSummary(result);
     return;
   }
 
@@ -268,6 +306,56 @@ function parseDevArgs(args: string[]): DevCliOptions {
   };
 }
 
+function parseScreenshotArgs(args: string[]): ScreenshotCliOptions {
+  let baseUrl = "";
+  let graphPath = "arch/graph.full.json";
+  let outDir = "arch/screenshots";
+  let paramsPath = "arch/screenshot-params.json";
+  let generateParams = false;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+
+    if (argument === "--base-url" && args[index + 1]) {
+      baseUrl = args[index + 1];
+      index += 1;
+      continue;
+    }
+
+    if (argument === "--graph" && args[index + 1]) {
+      graphPath = args[index + 1];
+      index += 1;
+      continue;
+    }
+
+    if (argument === "--out-dir" && args[index + 1]) {
+      outDir = args[index + 1];
+      index += 1;
+      continue;
+    }
+
+    if (argument === "--params" && args[index + 1]) {
+      paramsPath = args[index + 1];
+      index += 1;
+      continue;
+    }
+
+    if (argument === "--generate-params") {
+      generateParams = true;
+      continue;
+    }
+
+    if (argument === "--help" || argument === "-h") {
+      printHelp();
+      process.exit(0);
+    }
+
+    throw new Error(`Unknown argument: ${argument}`);
+  }
+
+  return { baseUrl, graphPath, outDir, paramsPath, generateParams };
+}
+
 async function runDev(options: DevCliOptions): Promise<void> {
   const children: ChildProcess[] = [];
 
@@ -394,9 +482,16 @@ function logDiffSummary(
   );
 }
 
+function logScreenshotSummary(result: { captured: number; skipped: number }): void {
+  console.log(
+    [`mode=screenshot`, `captured=${result.captured}`, `skipped=${result.skipped}`].join(" "),
+  );
+}
+
 function printHelp(): void {
   console.log(`next-arch-map analyze [options]
 next-arch-map diff --before <path> --after <path> [--out <path>]
+next-arch-map screenshot [options]
 next-arch-map serve [options]
 next-arch-map dev [options]
 
@@ -409,6 +504,13 @@ Diff options:
   --before <path>        Path to the baseline graph JSON.
   --after <path>         Path to the updated graph JSON.
   --out <path>           Output diff JSON path. Defaults to arch/graph.diff.json.
+
+Screenshot options:
+  --base-url <url>       Base URL of the running app (e.g. http://localhost:3000).
+  --graph <path>         Path to graph JSON. Defaults to arch/graph.full.json.
+  --out-dir <path>       Directory for screenshot PNGs. Defaults to arch/screenshots.
+  --params <path>        Path to params JSON. Defaults to arch/screenshot-params.json.
+  --generate-params      Generate a params template for dynamic routes and exit.
 
 Serve options:
   --project-root <path>  Project root to analyze. Defaults to the current working directory.

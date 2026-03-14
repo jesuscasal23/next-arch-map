@@ -38,3 +38,4 @@ export { analyzePagesToEndpoints } from "./analyzers/pagesToEndpoints.js";
 export { analyzeEndpointsToDb } from "./analyzers/endpointsToDb.js";
 export { mergeGraphs, mergePartial } from "./merge.js";
 export { getDbModelsForPage, getEndpointsForPage, getPagesForDbModel } from "./query.js";
+export { captureScreenshots, generateParamsTemplate } from "./screenshot.js";

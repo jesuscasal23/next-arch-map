@@ -98,7 +98,7 @@ function buildEdgeKey(from: string, to: string, kind: EdgeKind): string {
 export function App() {
   const [graph, setGraph] = useState<Graph | null>(null);
   const [graphDiff, setGraphDiff] = useState<GraphDiff | null>(null);
-  const [useServer, setUseServer] = useState(false);
+  const [useServer, setUseServer] = useState(true);
   const [serverUrl, setServerUrl] = useState("http://localhost:4321");
   const [focusedPageRoute, setFocusedPageRoute] = useState<string | null>(null);
   const [queryRoute, setQueryRoute] = useState("/dashboard");

@@ -12,9 +12,11 @@ import {
   getSourceFile,
   isIgnoredSourceFile,
   isRouteHandlerFile,
+  loadPathAliases,
   resolveLocalModulePath,
   resolveProjectRoot,
   walkDirectory,
+  type PathAlias,
 } from "../utils.js";
 
 type AnalyzeEndpointsToDbOptions = {
@@ -57,6 +59,7 @@ type ResolvedDeclaration = {
 
 type AnalysisState = {
   projectRoot: string;
+  aliases: PathAlias[];
   moduleCache: Map<string, ModuleInfo>;
   sourceFileCache: Map<string, ts.SourceFile>;
   visitedDeclarationKeys: Set<string>;
@@ -88,6 +91,7 @@ export async function analyzeEndpointsToDb(
   options: AnalyzeEndpointsToDbOptions,
 ): Promise<{ nodes: Node[]; edges: Edge[] }> {
   const projectRoot = resolveProjectRoot(options.projectRoot);
+  const aliases = loadPathAliases(projectRoot);
   const scanRoots = getExistingDirectories(projectRoot, options.apiDirs ?? DEFAULT_API_DIRS);
   const dbClientIdentifiers = new Set(options.dbClientIdentifiers ?? DEFAULT_DB_CLIENT_IDENTIFIERS);
   const nodes: Node[] = [];
@@ -114,6 +118,7 @@ export async function analyzeEndpointsToDb(
         const { availableMethods, dbUsageByModel } = analyzeEndpoint(
           filePath,
           projectRoot,
+          aliases,
           moduleCache,
           sourceFileCache,
           dbClientIdentifiers,
@@ -182,12 +187,14 @@ export async function analyzeEndpointsToDb(
 function analyzeEndpoint(
   routeFilePath: string,
   projectRoot: string,
+  aliases: PathAlias[],
   moduleCache: Map<string, ModuleInfo>,
   sourceFileCache: Map<string, ts.SourceFile>,
   dbClientIdentifiers: Set<string>,
 ): EndpointAnalysis {
   const state: AnalysisState = {
     projectRoot,
+    aliases,
     moduleCache,
     sourceFileCache,
     visitedDeclarationKeys: new Set<string>(),
@@ -479,6 +486,7 @@ function getModuleInfo(filePath: string, state: AnalysisState): ModuleInfo {
         filePath,
         statement.moduleSpecifier.text,
         state.projectRoot,
+        state.aliases,
       );
       if (!resolvedImportPath || !statement.importClause) {
         continue;
@@ -513,7 +521,7 @@ function getModuleInfo(filePath: string, state: AnalysisState): ModuleInfo {
     ) {
       const resolvedModulePath =
         statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)
-          ? resolveLocalModulePath(filePath, statement.moduleSpecifier.text, state.projectRoot)
+          ? resolveLocalModulePath(filePath, statement.moduleSpecifier.text, state.projectRoot, state.aliases)
           : null;
 
       for (const element of statement.exportClause.elements) {

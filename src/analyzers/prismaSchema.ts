@@ -26,18 +26,6 @@ type PrismaRelation = {
 };
 
 const MODEL_BLOCK_PATTERN = /^model\s+(\w+)\s*\{/;
-const ENUM_BLOCK_PATTERN = /^enum\s+(\w+)\s*\{/;
-const SCALAR_TYPES = new Set([
-  "String",
-  "Int",
-  "Float",
-  "Boolean",
-  "DateTime",
-  "Json",
-  "Bytes",
-  "Decimal",
-  "BigInt",
-]);
 
 export async function analyzePrismaSchema(
   projectRoot: string,
@@ -56,7 +44,6 @@ export async function analyzePrismaSchema(
   }
 
   const models = parseModels(content);
-  const enumNames = parseEnumNames(content);
   const nodes: Node[] = [];
   const edges: Edge[] = [];
   const edgeKeys = new Set<string>();
@@ -118,25 +105,10 @@ export async function analyzePrismaSchema(
   };
 }
 
-function parseEnumNames(content: string): Set<string> {
-  const names = new Set<string>();
-  const lines = content.split("\n");
-
-  for (const line of lines) {
-    const match = ENUM_BLOCK_PATTERN.exec(line.trim());
-    if (match) {
-      names.add(match[1]);
-    }
-  }
-
-  return names;
-}
-
 function parseModels(content: string): PrismaModel[] {
   const models: PrismaModel[] = [];
   const lines = content.split("\n");
   const modelNames = new Set<string>();
-  const enumNames = parseEnumNames(content);
 
   // First pass: collect all model names
   for (const line of lines) {
@@ -178,7 +150,7 @@ function parseModels(content: string): PrismaModel[] {
       continue;
     }
 
-    const field = parseField(trimmed, modelNames, enumNames);
+    const field = parseField(trimmed, modelNames);
     if (!field) {
       continue;
     }
@@ -200,7 +172,6 @@ function parseModels(content: string): PrismaModel[] {
 function parseField(
   line: string,
   modelNames: Set<string>,
-  enumNames: Set<string>,
 ):
   | { kind: "column"; column: PrismaColumn }
   | { kind: "relation"; relation: PrismaRelation }

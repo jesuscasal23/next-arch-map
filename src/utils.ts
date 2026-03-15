@@ -174,16 +174,77 @@ export function getSourceFile(
   }
 }
 
+export type PathAlias = { prefix: string; replacement: string };
+
+export function loadPathAliases(projectRoot: string): PathAlias[] {
+  for (const configName of ["tsconfig.json", "jsconfig.json"]) {
+    const configPath = path.join(projectRoot, configName);
+    if (!fileExists(configPath)) {
+      continue;
+    }
+
+    try {
+      const raw = fs.readFileSync(configPath, "utf8");
+      // Strip single-line comments (tsconfig allows them) before parsing
+      const stripped = raw.replace(/\/\/.*$/gm, "");
+      const config = JSON.parse(stripped) as {
+        compilerOptions?: { baseUrl?: string; paths?: Record<string, string[]> };
+      };
+      const baseUrl = config.compilerOptions?.baseUrl ?? ".";
+      const paths = config.compilerOptions?.paths;
+
+      if (!paths) {
+        break;
+      }
+
+      const aliases: PathAlias[] = [];
+      for (const [pattern, targets] of Object.entries(paths)) {
+        if (!pattern.endsWith("/*") || targets.length === 0) {
+          continue;
+        }
+
+        const target = targets[0];
+        if (!target.endsWith("/*")) {
+          continue;
+        }
+
+        const prefix = pattern.slice(0, -1); // "@/*" → "@/"
+        const targetDir = target.slice(0, -2); // "./src/*" → "./src"
+        const replacement = path.resolve(projectRoot, baseUrl, targetDir);
+        aliases.push({ prefix, replacement });
+      }
+
+      // Sort longest prefix first so more specific aliases match first
+      aliases.sort((a, b) => b.prefix.length - a.prefix.length);
+      return aliases;
+    } catch {
+      break;
+    }
+  }
+
+  // Fallback: default @/ → src/ for projects without tsconfig paths
+  return [{ prefix: "@/", replacement: path.join(projectRoot, "src") }];
+}
+
 export function resolveLocalModulePath(
   importerFilePath: string,
   specifier: string,
   projectRoot: string,
+  aliases?: PathAlias[],
 ): string | null {
   let basePath: string | null = null;
 
   if (specifier.startsWith("./") || specifier.startsWith("../")) {
     basePath = path.resolve(path.dirname(importerFilePath), specifier);
+  } else if (aliases) {
+    for (const alias of aliases) {
+      if (specifier.startsWith(alias.prefix)) {
+        basePath = path.join(alias.replacement, specifier.slice(alias.prefix.length));
+        break;
+      }
+    }
   } else if (specifier.startsWith("@/")) {
+    // Legacy fallback when no aliases provided
     basePath = path.join(projectRoot, "src", specifier.slice(2));
   }
 

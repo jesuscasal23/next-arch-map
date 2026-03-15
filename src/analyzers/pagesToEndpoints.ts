@@ -15,9 +15,11 @@ import {
   getStringLiteralValue,
   isIgnoredSourceFile,
   isPageFile,
+  loadPathAliases,
   resolveLocalModulePath,
   resolveProjectRoot,
   walkDirectory,
+  type PathAlias,
 } from "../utils.js";
 
 type HttpCall = {
@@ -51,6 +53,7 @@ export async function analyzePagesToEndpoints(
   options: AnalyzePagesToEndpointsOptions,
 ): Promise<Graph> {
   const projectRoot = resolveProjectRoot(options.projectRoot);
+  const aliases = loadPathAliases(projectRoot);
   const appDirs = getExistingDirectories(projectRoot, options.appDirs ?? DEFAULT_APP_DIRS);
 
   if (appDirs.length === 0) {
@@ -109,6 +112,7 @@ export async function analyzePagesToEndpoints(
           httpClientMethods,
           sdkClientIdentifiers,
           sourceFileCache,
+          aliases,
         );
 
         const route = getPageRouteFromFile(appDir, filePath);
@@ -264,6 +268,7 @@ function collectHttpCallsTransitively(
   httpClientMethods: Set<string>,
   sdkClientIdentifiers: Set<string>,
   sourceFileCache: Map<string, ts.SourceFile>,
+  aliases: PathAlias[],
   visited?: Set<string>,
 ): HttpCall[] {
   const resolvedPath = path.resolve(filePath);
@@ -281,7 +286,7 @@ function collectHttpCallsTransitively(
   const calls = collectHttpCalls(sourceFile, httpClientIdentifiers, httpClientMethods, sdkClientIdentifiers);
 
   for (const specifier of collectImportSpecifiers(sourceFile)) {
-    const resolved = resolveLocalModulePath(filePath, specifier, projectRoot);
+    const resolved = resolveLocalModulePath(filePath, specifier, projectRoot, aliases);
     if (!resolved) {
       continue;
     }
@@ -293,6 +298,7 @@ function collectHttpCallsTransitively(
       httpClientMethods,
       sdkClientIdentifiers,
       sourceFileCache,
+      aliases,
       seen,
     );
     calls.push(...transitiveCalls);

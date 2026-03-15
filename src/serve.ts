@@ -176,9 +176,14 @@ export async function serve(options: ServeOptions): Promise<void> {
   });
 
   const server = http.createServer((req, res) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    const origin = req.headers.origin ?? "";
+    const isLocalOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+    if (isLocalOrigin) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+    }
     res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader("Vary", "Origin");
 
     if (req.method === "OPTIONS") {
       res.statusCode = 204;
@@ -271,7 +276,7 @@ export async function serve(options: ServeOptions): Promise<void> {
 
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
-    server.listen(port, () => {
+    server.listen(port, "127.0.0.1", () => {
       server.off("error", reject);
       console.log(`next-arch-map serve listening on http://localhost:${port}`);
       resolve();

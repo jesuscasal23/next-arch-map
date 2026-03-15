@@ -6,10 +6,7 @@ import path from "node:path";
 import { analyzeProject, diffGraphs } from "./index.js";
 import type { Graph } from "./model.js";
 import { generateDescribeContext } from "./describe.js";
-import {
-  captureScreenshots,
-  generateParamsTemplate,
-} from "./screenshot.js";
+import { captureScreenshots, generateParamsTemplate } from "./screenshot.js";
 import { serve, type ServeOptions } from "./serve.js";
 import { readJsonFile, writeJsonFile } from "./utils.js";
 
@@ -48,6 +45,191 @@ type DescribeCliOptions = {
   all: boolean;
 };
 
+// ---------------------------------------------------------------------------
+// Generic argument parser
+// ---------------------------------------------------------------------------
+
+type ArgDef =
+  | { key: string; type: "string"; default?: string }
+  | { key: string; type: "number"; default: number }
+  | { key: string; type: "boolean" }
+  | { key: string; type: "string[]" };
+
+function parseArgs(
+  args: string[],
+  defs: Record<string, ArgDef>,
+): Record<string, string | number | boolean | string[]> {
+  const result: Record<string, string | number | boolean | string[]> = {};
+
+  for (const def of Object.values(defs)) {
+    if (def.type === "string[]") {
+      result[def.key] = [];
+    } else if (def.type === "boolean") {
+      result[def.key] = false;
+    } else if ("default" in def && def.default !== undefined) {
+      result[def.key] = def.default;
+    } else {
+      result[def.key] = def.type === "number" ? 0 : "";
+    }
+  }
+
+  for (let i = 0; i < args.length; i += 1) {
+    const flag = args[i];
+
+    if (flag === "--help" || flag === "-h") {
+      printHelp();
+      process.exit(0);
+    }
+
+    const def = defs[flag];
+    if (!def) {
+      throw new Error(`Unknown argument: ${flag}`);
+    }
+
+    if (def.type === "boolean") {
+      result[def.key] = true;
+      continue;
+    }
+
+    const value = args[i + 1];
+    if (!value) {
+      throw new Error(`Missing value for ${flag}`);
+    }
+    i += 1;
+
+    if (def.type === "number") {
+      const num = Number(value);
+      if (!Number.isInteger(num) || num <= 0) {
+        throw new Error(`Invalid ${flag}: ${value}`);
+      }
+      result[def.key] = num;
+    } else if (def.type === "string[]") {
+      (result[def.key] as string[]).push(value);
+    } else {
+      result[def.key] = value;
+    }
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Command-specific argument wrappers
+// ---------------------------------------------------------------------------
+
+function parseAnalyzeArgs(args: string[]): AnalyzeCliOptions {
+  const raw = parseArgs(args, {
+    "--project-root": { key: "projectRoot", type: "string", default: process.cwd() },
+    "--out": { key: "out", type: "string", default: "arch/graph.full.json" },
+    "--app-dir": { key: "appDirs", type: "string[]" },
+  });
+  const appDirs = raw.appDirs as string[];
+  return {
+    projectRoot: path.resolve(raw.projectRoot as string),
+    out: raw.out as string,
+    appDirs: appDirs.length > 0 ? appDirs : undefined,
+  };
+}
+
+function parseDiffArgs(args: string[]): DiffCliOptions {
+  const raw = parseArgs(args, {
+    "--before": { key: "beforePath", type: "string" },
+    "--after": { key: "afterPath", type: "string" },
+    "--out": { key: "out", type: "string", default: "arch/graph.diff.json" },
+  });
+  if (!raw.beforePath || !raw.afterPath) {
+    throw new Error("The diff command requires --before <path> and --after <path>.");
+  }
+  return {
+    beforePath: raw.beforePath as string,
+    afterPath: raw.afterPath as string,
+    out: raw.out as string,
+  };
+}
+
+function parseServeArgs(args: string[]): ServeCliOptions {
+  const raw = parseArgs(args, {
+    "--project-root": { key: "projectRoot", type: "string", default: process.cwd() },
+    "--port": { key: "port", type: "number", default: 4321 },
+    "--app-dir": { key: "appDirs", type: "string[]" },
+  });
+  const appDirs = raw.appDirs as string[];
+  return {
+    projectRoot: path.resolve(raw.projectRoot as string),
+    port: raw.port as number,
+    appDirs: appDirs.length > 0 ? appDirs : undefined,
+  };
+}
+
+function parseDevArgs(args: string[]): DevCliOptions {
+  const raw = parseArgs(args, {
+    "--project-root": { key: "projectRoot", type: "string", default: process.cwd() },
+    "--port": { key: "port", type: "number", default: 4321 },
+    "--viewer-dir": { key: "viewerDir", type: "string" },
+    "--app-dir": { key: "appDirs", type: "string[]" },
+  });
+
+  let viewerDir = raw.viewerDir as string;
+  if (!viewerDir) {
+    const packageDir = path.dirname(path.dirname(new URL(import.meta.url).pathname));
+    const builtinViewer = path.join(packageDir, "viewer");
+
+    if (fs.existsSync(path.join(builtinViewer, "package.json"))) {
+      viewerDir = builtinViewer;
+    }
+
+    if (!viewerDir) {
+      throw new Error(
+        "Could not find viewer directory. Provide --viewer-dir <path> pointing to the viewer app.",
+      );
+    }
+  } else {
+    viewerDir = path.resolve(viewerDir);
+  }
+
+  const appDirs = raw.appDirs as string[];
+  return {
+    projectRoot: path.resolve(raw.projectRoot as string),
+    port: raw.port as number,
+    viewerDir,
+    appDirs: appDirs.length > 0 ? appDirs : undefined,
+  };
+}
+
+function parseScreenshotArgs(args: string[]): ScreenshotCliOptions {
+  const raw = parseArgs(args, {
+    "--base-url": { key: "baseUrl", type: "string" },
+    "--graph": { key: "graphPath", type: "string", default: "arch/graph.full.json" },
+    "--out-dir": { key: "outDir", type: "string", default: "arch/screenshots" },
+    "--params": { key: "paramsPath", type: "string", default: "arch/screenshot-params.json" },
+    "--generate-params": { key: "generateParams", type: "boolean" },
+  });
+  return {
+    baseUrl: raw.baseUrl as string,
+    graphPath: raw.graphPath as string,
+    outDir: raw.outDir as string,
+    paramsPath: raw.paramsPath as string,
+    generateParams: raw.generateParams as boolean,
+  };
+}
+
+function parseDescribeArgs(args: string[]): DescribeCliOptions {
+  const raw = parseArgs(args, {
+    "--graph": { key: "graphPath", type: "string", default: "arch/graph.full.json" },
+    "--out": { key: "outPath", type: "string", default: "arch/describe-context.md" },
+    "--all": { key: "all", type: "boolean" },
+  });
+  return {
+    graphPath: raw.graphPath as string,
+    outPath: raw.outPath as string,
+    all: raw.all as boolean,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Commands
+// ---------------------------------------------------------------------------
+
 async function main(): Promise<void> {
   const [commandOrArg, ...rest] = process.argv.slice(2);
 
@@ -58,9 +240,7 @@ async function main(): Promise<void> {
       outPath: path.resolve(options.outPath),
       onlyMissing: !options.all,
     });
-    console.log(
-      `describe context written to ${options.outPath} (${result.nodeCount} nodes)`,
-    );
+    console.log(`describe context written to ${options.outPath} (${result.nodeCount} nodes)`);
     console.log(
       `Tell your AI: "Read ${options.outPath} and update the descriptions in ${options.graphPath}"`,
     );
@@ -129,290 +309,6 @@ async function main(): Promise<void> {
 
   writeJsonFile(outputFile, graph);
   logAnalyzeSummary(graph, outputFile, options.projectRoot);
-}
-
-function parseAnalyzeArgs(args: string[]): AnalyzeCliOptions {
-  let projectRoot = process.cwd();
-  let out = "arch/graph.full.json";
-  const appDirs: string[] = [];
-
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-
-    if (argument === "--project-root" && args[index + 1]) {
-      projectRoot = path.resolve(args[index + 1]);
-      index += 1;
-      continue;
-    }
-
-    if (argument === "--out" && args[index + 1]) {
-      out = args[index + 1];
-      index += 1;
-      continue;
-    }
-
-    if (argument === "--app-dir" && args[index + 1]) {
-      appDirs.push(args[index + 1]);
-      index += 1;
-      continue;
-    }
-
-    if (argument === "--help" || argument === "-h") {
-      printHelp();
-      process.exit(0);
-    }
-
-    throw new Error(`Unknown argument: ${argument}`);
-  }
-
-  return {
-    projectRoot,
-    out,
-    appDirs: appDirs.length > 0 ? appDirs : undefined,
-  };
-}
-
-function parseDiffArgs(args: string[]): DiffCliOptions {
-  let beforePath = "";
-  let afterPath = "";
-  let out = "arch/graph.diff.json";
-
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-
-    if (argument === "--before" && args[index + 1]) {
-      beforePath = args[index + 1];
-      index += 1;
-      continue;
-    }
-
-    if (argument === "--after" && args[index + 1]) {
-      afterPath = args[index + 1];
-      index += 1;
-      continue;
-    }
-
-    if (argument === "--out" && args[index + 1]) {
-      out = args[index + 1];
-      index += 1;
-      continue;
-    }
-
-    if (argument === "--help" || argument === "-h") {
-      printHelp();
-      process.exit(0);
-    }
-
-    throw new Error(`Unknown argument: ${argument}`);
-  }
-
-  if (!beforePath || !afterPath) {
-    throw new Error("The diff command requires --before <path> and --after <path>.");
-  }
-
-  return {
-    beforePath,
-    afterPath,
-    out,
-  };
-}
-
-function parseServeArgs(args: string[]): ServeCliOptions {
-  let projectRoot = process.cwd();
-  let port = 4321;
-  const appDirs: string[] = [];
-
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-
-    if (argument === "--project-root" && args[index + 1]) {
-      projectRoot = path.resolve(args[index + 1]);
-      index += 1;
-      continue;
-    }
-
-    if (argument === "--port" && args[index + 1]) {
-      port = Number(args[index + 1]);
-      if (!Number.isInteger(port) || port <= 0) {
-        throw new Error(`Invalid port: ${args[index + 1]}`);
-      }
-      index += 1;
-      continue;
-    }
-
-    if (argument === "--app-dir" && args[index + 1]) {
-      appDirs.push(args[index + 1]);
-      index += 1;
-      continue;
-    }
-
-    if (argument === "--help" || argument === "-h") {
-      printHelp();
-      process.exit(0);
-    }
-
-    throw new Error(`Unknown argument: ${argument}`);
-  }
-
-  return {
-    projectRoot,
-    port,
-    appDirs: appDirs.length > 0 ? appDirs : undefined,
-  };
-}
-
-function parseDevArgs(args: string[]): DevCliOptions {
-  let projectRoot = process.cwd();
-  let port = 4321;
-  let viewerDir = "";
-  const appDirs: string[] = [];
-
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-
-    if (argument === "--project-root" && args[index + 1]) {
-      projectRoot = path.resolve(args[index + 1]);
-      index += 1;
-      continue;
-    }
-
-    if (argument === "--port" && args[index + 1]) {
-      port = Number(args[index + 1]);
-      if (!Number.isInteger(port) || port <= 0) {
-        throw new Error(`Invalid port: ${args[index + 1]}`);
-      }
-      index += 1;
-      continue;
-    }
-
-    if (argument === "--viewer-dir" && args[index + 1]) {
-      viewerDir = path.resolve(args[index + 1]);
-      index += 1;
-      continue;
-    }
-
-    if (argument === "--app-dir" && args[index + 1]) {
-      appDirs.push(args[index + 1]);
-      index += 1;
-      continue;
-    }
-
-    if (argument === "--help" || argument === "-h") {
-      printHelp();
-      process.exit(0);
-    }
-
-    throw new Error(`Unknown argument: ${argument}`);
-  }
-
-  if (!viewerDir) {
-    // Try to find the viewer relative to the analyzer package
-    const packageDir = path.dirname(path.dirname(new URL(import.meta.url).pathname));
-    const builtinViewer = path.join(packageDir, "viewer");
-
-    if (fs.existsSync(path.join(builtinViewer, "package.json"))) {
-      viewerDir = builtinViewer;
-    }
-
-    if (!viewerDir) {
-      throw new Error(
-        "Could not find viewer directory. Provide --viewer-dir <path> pointing to the viewer app.",
-      );
-    }
-  }
-
-  return {
-    projectRoot,
-    port,
-    viewerDir,
-    appDirs: appDirs.length > 0 ? appDirs : undefined,
-  };
-}
-
-function parseScreenshotArgs(args: string[]): ScreenshotCliOptions {
-  let baseUrl = "";
-  let graphPath = "arch/graph.full.json";
-  let outDir = "arch/screenshots";
-  let paramsPath = "arch/screenshot-params.json";
-  let generateParams = false;
-
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-
-    if (argument === "--base-url" && args[index + 1]) {
-      baseUrl = args[index + 1];
-      index += 1;
-      continue;
-    }
-
-    if (argument === "--graph" && args[index + 1]) {
-      graphPath = args[index + 1];
-      index += 1;
-      continue;
-    }
-
-    if (argument === "--out-dir" && args[index + 1]) {
-      outDir = args[index + 1];
-      index += 1;
-      continue;
-    }
-
-    if (argument === "--params" && args[index + 1]) {
-      paramsPath = args[index + 1];
-      index += 1;
-      continue;
-    }
-
-    if (argument === "--generate-params") {
-      generateParams = true;
-      continue;
-    }
-
-    if (argument === "--help" || argument === "-h") {
-      printHelp();
-      process.exit(0);
-    }
-
-    throw new Error(`Unknown argument: ${argument}`);
-  }
-
-  return { baseUrl, graphPath, outDir, paramsPath, generateParams };
-}
-
-function parseDescribeArgs(args: string[]): DescribeCliOptions {
-  let graphPath = "arch/graph.full.json";
-  let outPath = "arch/describe-context.md";
-  let all = false;
-
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-
-    if (argument === "--graph" && args[index + 1]) {
-      graphPath = args[index + 1];
-      index += 1;
-      continue;
-    }
-
-    if (argument === "--out" && args[index + 1]) {
-      outPath = args[index + 1];
-      index += 1;
-      continue;
-    }
-
-    if (argument === "--all") {
-      all = true;
-      continue;
-    }
-
-    if (argument === "--help" || argument === "-h") {
-      printHelp();
-      process.exit(0);
-    }
-
-    throw new Error(`Unknown argument: ${argument}`);
-  }
-
-  return { graphPath, outPath, all };
 }
 
 async function runDev(options: DevCliOptions): Promise<void> {
@@ -494,6 +390,10 @@ async function runDev(options: DevCliOptions): Promise<void> {
   // Keep the process alive
   await new Promise<void>(() => {});
 }
+
+// ---------------------------------------------------------------------------
+// Output helpers
+// ---------------------------------------------------------------------------
 
 function logAnalyzeSummary(graph: Graph, outputFile: string, projectRoot: string): void {
   const pageCount = graph.nodes.filter((node) => node.type === "page").length;

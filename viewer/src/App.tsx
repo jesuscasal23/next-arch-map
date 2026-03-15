@@ -3,15 +3,17 @@ import * as Switch from "@radix-ui/react-switch";
 import { Filters } from "./Filters";
 import { GraphView } from "./GraphView";
 import { NodeDetails } from "./NodeDetails";
-import type { DiffStatus, EdgeKind, Graph, GraphDiff, Node, NodeType } from "./types";
+import {
+  buildEdgeKey,
+  type DiffStatus,
+  type EdgeKind,
+  type Graph,
+  type GraphDiff,
+  type Node,
+  type NodeType,
+} from "./types";
 
-const ALL_NODE_TYPES: NodeType[] = [
-  "page",
-  "endpoint",
-  "handler",
-  "db",
-  "service",
-];
+const ALL_NODE_TYPES: NodeType[] = ["page", "endpoint", "handler", "db", "service"];
 const ALL_EDGE_KINDS: EdgeKind[] = [
   "page-endpoint",
   "page-service",
@@ -19,7 +21,6 @@ const ALL_EDGE_KINDS: EdgeKind[] = [
   "endpoint-handler",
   "db-relation",
 ];
-
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object";
@@ -46,10 +47,6 @@ function isGraphDiff(value: unknown): value is GraphDiff {
     (isRecord(firstNode) && "node" in firstNode && "status" in firstNode) ||
     (isRecord(firstEdge) && "edge" in firstEdge && "status" in firstEdge)
   );
-}
-
-function buildEdgeKey(from: string, to: string, kind: EdgeKind): string {
-  return `${from}::${to}::${kind}`;
 }
 
 export function App() {
@@ -234,11 +231,8 @@ export function App() {
   const baseGraph = getRenderedGraph(graph, graphDiff);
   const pageRoutes = getPageRoutes(baseGraph);
   const renderedGraph =
-    focusedPageRoute && baseGraph
-      ? buildFocusedSubgraph(baseGraph, focusedPageRoute)
-      : baseGraph;
-  const selectedNode =
-    renderedGraph?.nodes.find((node) => node.id === selectedNodeId) ?? null;
+    focusedPageRoute && baseGraph ? buildFocusedSubgraph(baseGraph, focusedPageRoute) : baseGraph;
+  const selectedNode = renderedGraph?.nodes.find((node) => node.id === selectedNodeId) ?? null;
   const nodeStatusById = graphDiff ? buildNodeStatusById(graphDiff) : undefined;
   const edgeStatusByKey = graphDiff ? buildEdgeStatusByKey(graphDiff) : undefined;
 
@@ -263,12 +257,8 @@ export function App() {
         <div className="p-5 space-y-5">
           {/* Header */}
           <div>
-            <h1 className="text-base font-bold text-slate-900 tracking-tight">
-              next-arch-map
-            </h1>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              Architecture graph viewer
-            </p>
+            <h1 className="text-base font-bold text-slate-900 tracking-tight">next-arch-map</h1>
+            <p className="text-[11px] text-slate-400 mt-0.5">Architecture graph viewer</p>
           </div>
 
           {/* Status badge */}
@@ -280,11 +270,7 @@ export function App() {
               </span>
               <span className="text-xs text-slate-500">
                 {nodeCount} nodes, {edgeCount} edges
-                {graphDiff && (
-                  <span className="ml-1 text-emerald-600 font-medium">
-                    (diff)
-                  </span>
-                )}
+                {graphDiff && <span className="ml-1 text-emerald-600 font-medium">(diff)</span>}
               </span>
             </div>
           ) : loadError ? (
@@ -337,9 +323,7 @@ export function App() {
             )}
             {!useServer && (
               <div>
-                <label className="text-[11px] text-slate-500 block mb-1.5">
-                  Load graph JSON
-                </label>
+                <label className="text-[11px] text-slate-500 block mb-1.5">Load graph JSON</label>
                 <input
                   type="file"
                   accept="application/json,.json"
@@ -404,9 +388,7 @@ export function App() {
                 {isQueryLoading ? "Loading..." : "Query"}
               </button>
 
-              {queryError && (
-                <div className="text-xs text-red-600">{queryError}</div>
-              )}
+              {queryError && <div className="text-xs text-red-600">{queryError}</div>}
 
               {queryResult && (
                 <div className="text-xs text-slate-600">
@@ -443,8 +425,18 @@ export function App() {
           <div className="h-full flex items-center justify-center">
             <div className="text-center space-y-3">
               <div className="text-4xl opacity-20">
-                <svg className="mx-auto h-12 w-12 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                <svg
+                  className="mx-auto h-12 w-12 text-slate-300"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"
+                  />
                 </svg>
               </div>
               <p className="text-sm text-slate-400">

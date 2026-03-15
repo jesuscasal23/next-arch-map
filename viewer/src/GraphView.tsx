@@ -13,7 +13,7 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import type { DiffStatus, EdgeKind, Graph, NodeType } from "./types";
+import { buildEdgeKey, type DiffStatus, type EdgeKind, type Graph, type NodeType } from "./types";
 
 type GraphViewProps = {
   graph: Graph;
@@ -30,6 +30,7 @@ const NODE_COLOR: Record<NodeType, string> = {
   endpoint: "#059669",
   db: "#dc2626",
   handler: "#14b8a6",
+  action: "#8b5cf6",
   service: "#7c3aed",
 };
 
@@ -46,18 +47,16 @@ const EDGE_COLOR: Record<EdgeKind, string> = {
 const DIFF_BORDER_COLOR: Record<DiffStatus, string> = {
   added: "#22c55e",
   removed: "#ef4444",
+  modified: "#f59e0b",
   unchanged: "rgba(15, 23, 42, 0.12)",
 };
 
 const DIFF_EDGE_COLOR: Record<DiffStatus, string> = {
   added: "#22c55e",
   removed: "#ef4444",
+  modified: "#f59e0b",
   unchanged: "#000000",
 };
-
-function buildEdgeKey(from: string, to: string, kind: EdgeKind): string {
-  return `${from}::${to}::${kind}`;
-}
 
 /**
  * Reorder nodes within each column so that connected nodes are placed
@@ -156,9 +155,7 @@ function PageNode({ data }: NodeProps) {
   return (
     <div>
       <Handle type="target" position={Position.Left} style={{ visibility: "hidden" }} />
-      <div style={{ fontSize: 12, fontWeight: 600 }}>
-        {String(d.label ?? "")}
-      </div>
+      <div style={{ fontSize: 12, fontWeight: 600 }}>{String(d.label ?? "")}</div>
       {description && <DescriptionLine text={description} />}
       {screenshot && (
         <img
@@ -240,9 +237,7 @@ function DbTableNode({ data }: NodeProps) {
               U
             </span>
           )}
-          {!col.isId && !col.isUnique && (
-            <span style={{ width: 12, display: "inline-block" }} />
-          )}
+          {!col.isId && !col.isUnique && <span style={{ width: 12, display: "inline-block" }} />}
           <span style={{ fontWeight: 500, flex: 1 }}>{col.name}</span>
           <span
             style={{
@@ -280,9 +275,7 @@ function DescribedNode({ data }: NodeProps) {
   return (
     <div>
       <Handle type="target" position={Position.Left} style={{ visibility: "hidden" }} />
-      <div style={{ fontSize: 12, fontWeight: 600 }}>
-        {String(d.label ?? "")}
-      </div>
+      <div style={{ fontSize: 12, fontWeight: 600 }}>{String(d.label ?? "")}</div>
       {description && <DescriptionLine text={description} dark={dark} />}
       <Handle type="source" position={Position.Right} style={{ visibility: "hidden" }} />
     </div>
@@ -332,9 +325,7 @@ export function GraphView(props: GraphViewProps) {
     const typeOrder: NodeType[] = ["page", "endpoint", "handler", "db", "service"];
     const visibleNodes = graph.nodes.filter((node) => visibleNodeTypes.has(node.type));
     const visibleNodeIds = new Set(visibleNodes.map((node) => node.id));
-    const nodesByType = new Map<NodeType, typeof visibleNodes>(
-      typeOrder.map((type) => [type, []]),
-    );
+    const nodesByType = new Map<NodeType, typeof visibleNodes>(typeOrder.map((type) => [type, []]));
 
     for (const node of visibleNodes) {
       nodesByType.get(node.type)?.push(node);
@@ -350,9 +341,7 @@ export function GraphView(props: GraphViewProps) {
     const flowNodes: FlowNode[] = [];
     const columnWidth = 300;
     const defaultRowHeight = 80;
-    const hasScreenshots = graph.nodes.some(
-      (n) => n.type === "page" && n.meta?.screenshot,
-    );
+    const hasScreenshots = graph.nodes.some((n) => n.type === "page" && n.meta?.screenshot);
     const pageRowHeight = hasScreenshots ? 140 : defaultRowHeight;
 
     // Compute max db column count for row height
@@ -361,11 +350,13 @@ export function GraphView(props: GraphViewProps) {
       const cols = Array.isArray(n.meta?.columns) ? (n.meta?.columns as unknown[]).length : 0;
       return Math.max(max, cols);
     }, 0);
-    const dbRowHeight = maxDbColumns > 0 ? Math.max(defaultRowHeight, 30 + maxDbColumns * 22) : defaultRowHeight;
+    const dbRowHeight =
+      maxDbColumns > 0 ? Math.max(defaultRowHeight, 30 + maxDbColumns * 22) : defaultRowHeight;
 
     activeTypeOrder.forEach((type, columnIndex) => {
       const nodes = nodesByType.get(type) ?? [];
-      const rowHeight = type === "page" ? pageRowHeight : type === "db" ? dbRowHeight : defaultRowHeight;
+      const rowHeight =
+        type === "page" ? pageRowHeight : type === "db" ? dbRowHeight : defaultRowHeight;
       nodes.forEach((node, rowIndex) => {
         const isSelected = node.id === selectedNodeId;
         const status = nodeStatusById?.get(node.id) ?? "unchanged";
@@ -375,7 +366,10 @@ export function GraphView(props: GraphViewProps) {
         const screenshot = isPage ? (node.meta?.screenshot as string | undefined) : undefined;
         const description = node.meta?.description as string | undefined;
         const isDarkText = false;
-        const isDbTable = node.type === "db" && Array.isArray(node.meta?.columns) && (node.meta?.columns as unknown[]).length > 0;
+        const isDbTable =
+          node.type === "db" &&
+          Array.isArray(node.meta?.columns) &&
+          (node.meta?.columns as unknown[]).length > 0;
         const dbColumns = isDbTable ? (node.meta?.columns as DbColumn[]) : undefined;
 
         const nodeType = isDbTable
@@ -451,8 +445,10 @@ export function GraphView(props: GraphViewProps) {
           visibleNodeIds.has(edge.to),
       )
       .map((edge, index) => {
-        const status = edgeStatusByKey?.get(buildEdgeKey(edge.from, edge.to, edge.kind)) ?? "unchanged";
-        const strokeColor = status === "unchanged" ? EDGE_COLOR[edge.kind] : DIFF_EDGE_COLOR[status];
+        const status =
+          edgeStatusByKey?.get(buildEdgeKey(edge.from, edge.to, edge.kind)) ?? "unchanged";
+        const strokeColor =
+          status === "unchanged" ? EDGE_COLOR[edge.kind] : DIFF_EDGE_COLOR[status];
 
         return {
           id: `${edge.from}=>${edge.to}::${edge.kind}::${index}`,
@@ -474,14 +470,7 @@ export function GraphView(props: GraphViewProps) {
       });
 
     return { flowNodes, flowEdges };
-  }, [
-    edgeStatusByKey,
-    graph,
-    nodeStatusById,
-    selectedNodeId,
-    visibleEdgeKinds,
-    visibleNodeTypes,
-  ]);
+  }, [edgeStatusByKey, graph, nodeStatusById, selectedNodeId, visibleEdgeKinds, visibleNodeTypes]);
 
   // Apply hover highlighting as a cheap pass over precomputed nodes/edges
   const activeNodeId = hoveredNodeId ?? selectedNodeId;

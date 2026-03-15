@@ -9,15 +9,14 @@ const TYPE_BADGE_COLORS: Record<NodeType, string> = {
   endpoint: "bg-emerald-100 text-emerald-700",
   handler: "bg-teal-100 text-teal-700",
   db: "bg-red-100 text-red-700",
+  action: "bg-purple-100 text-purple-700",
   service: "bg-violet-100 text-violet-700",
 };
 
 export function NodeDetails({ node }: NodeDetailsProps) {
   if (!node) {
     return (
-      <div className="mt-5 py-4 text-center text-xs text-slate-400">
-        Click a node to inspect
-      </div>
+      <div className="mt-5 py-4 text-center text-xs text-slate-400">Click a node to inspect</div>
     );
   }
 
@@ -36,14 +35,10 @@ export function NodeDetails({ node }: NodeDetailsProps) {
           >
             {node.type}
           </span>
-          <span className="text-sm font-medium text-slate-900 truncate">
-            {node.label}
-          </span>
+          <span className="text-sm font-medium text-slate-900 truncate">{node.label}</span>
         </div>
 
-        <div className="text-[11px] text-slate-500 font-mono break-all">
-          {node.id}
-        </div>
+        <div className="text-[11px] text-slate-500 font-mono break-all">{node.id}</div>
 
         {(node.meta?.descriptionLong ?? node.meta?.description) ? (
           <p className="text-xs text-slate-600 leading-relaxed">
@@ -73,7 +68,8 @@ export function NodeDetails({ node }: NodeDetailsProps) {
             {JSON.stringify(
               Object.fromEntries(
                 Object.entries(node.meta).filter(
-                  ([key]) => key !== "screenshot" && key !== "description" && key !== "descriptionLong",
+                  ([key]) =>
+                    key !== "screenshot" && key !== "description" && key !== "descriptionLong",
                 ),
               ),
               null,

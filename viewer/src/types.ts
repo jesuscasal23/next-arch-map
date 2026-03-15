@@ -1,9 +1,6 @@
-export type NodeType =
-  | "page"
-  | "endpoint"
-  | "db"
-  | "handler"
-  | "service";
+// Keep in sync with src/model.ts and src/diff.ts (the backend is the source of truth).
+
+export type NodeType = "page" | "endpoint" | "db" | "handler" | "action" | "service";
 
 export type Node = {
   id: string;
@@ -33,7 +30,7 @@ export type Graph = {
   edges: Edge[];
 };
 
-export type DiffStatus = "added" | "removed" | "unchanged";
+export type DiffStatus = "added" | "removed" | "modified" | "unchanged";
 
 export type NodeDiff = {
   node: Node;
@@ -49,3 +46,7 @@ export type GraphDiff = {
   nodes: NodeDiff[];
   edges: EdgeDiff[];
 };
+
+export function buildEdgeKey(from: string, to: string, kind: EdgeKind): string {
+  return `${from}::${to}::${kind}`;
+}

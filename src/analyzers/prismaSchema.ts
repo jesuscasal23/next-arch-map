@@ -113,9 +113,7 @@ export async function analyzePrismaSchema(
     nodes: nodes.sort((a, b) => a.id.localeCompare(b.id)),
     edges: edges.sort(
       (a, b) =>
-        a.kind.localeCompare(b.kind) ||
-        a.from.localeCompare(b.from) ||
-        a.to.localeCompare(b.to),
+        a.kind.localeCompare(b.kind) || a.from.localeCompare(b.from) || a.to.localeCompare(b.to),
     ),
   };
 }
@@ -274,9 +272,13 @@ function parseField(
     column.isUnique = true;
   }
 
-  const defaultMatch = /@default\(([^)]*)\)/.exec(restLine);
-  if (defaultMatch) {
-    column.default = defaultMatch[1];
+  const defaultAttr = extractAttribute(restTokens, "@default");
+  if (defaultAttr) {
+    const innerStart = "@default(".length;
+    const innerEnd = defaultAttr.lastIndexOf(")");
+    if (innerEnd > innerStart) {
+      column.default = defaultAttr.slice(innerStart, innerEnd);
+    }
   }
 
   const mapMatch = /@map\("([^"]*)"\)/.exec(restLine);

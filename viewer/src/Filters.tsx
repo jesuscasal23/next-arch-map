@@ -16,6 +16,7 @@ const NODE_TYPE_COLORS: Record<NodeType, string> = {
   endpoint: "bg-emerald-600",
   handler: "bg-teal-500",
   db: "bg-red-600",
+  action: "bg-purple-500",
   service: "bg-violet-600",
 };
 
@@ -38,10 +39,7 @@ export function Filters(props: FiltersProps) {
         </h3>
         <div className="space-y-1.5">
           {allNodeTypes.map((type) => (
-            <label
-              key={type}
-              className="flex items-center gap-2 cursor-pointer group"
-            >
+            <label key={type} className="flex items-center gap-2 cursor-pointer group">
               <Checkbox.Root
                 checked={visibleNodeTypes.has(type)}
                 onCheckedChange={() => onToggleNodeType(type)}
@@ -59,9 +57,7 @@ export function Filters(props: FiltersProps) {
                   </svg>
                 </Checkbox.Indicator>
               </Checkbox.Root>
-              <span
-                className={`h-2.5 w-2.5 rounded-full ${NODE_TYPE_COLORS[type]}`}
-              />
+              <span className={`h-2.5 w-2.5 rounded-full ${NODE_TYPE_COLORS[type]}`} />
               <span className="text-xs text-slate-600 group-hover:text-slate-900 transition-colors">
                 {type}
               </span>
@@ -77,10 +73,7 @@ export function Filters(props: FiltersProps) {
           </h3>
           <div className="space-y-1.5">
             {allEdgeKinds.map((kind) => (
-              <label
-                key={kind}
-                className="flex items-center gap-2 cursor-pointer group"
-              >
+              <label key={kind} className="flex items-center gap-2 cursor-pointer group">
                 <Checkbox.Root
                   checked={visibleEdgeKinds.has(kind)}
                   onCheckedChange={() => onToggleEdgeKind(kind)}
